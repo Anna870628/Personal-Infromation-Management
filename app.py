@@ -170,7 +170,10 @@ if menu == "1. 自檢表":
             "id": None,  # 隱藏資料庫主鍵 ID，避免使用者修改
             "item_no": st.column_config.TextColumn("項次", help="請手動輸入序號 (例如 1, 2...)"),
             "unit_name": st.column_config.TextColumn("單位名稱"),
-            "project_name": st.column_config.TextColumn("業務名稱", placeholder="請輸入業務或專案名稱"),
+            
+            # 【修正此處】將 placeholder 移除，改用 help 提示
+            "project_name": st.column_config.TextColumn("業務名稱", help="請輸入業務或專案名稱"),
+            
             "owner": st.column_config.TextColumn("業務負責人"),
             "status": st.column_config.SelectboxColumn("業務狀態", options=["進行中", "已結案"]),
             "pi_inventory_done": st.column_config.SelectboxColumn("個資清冊建檔", options=["v", "-"]),
