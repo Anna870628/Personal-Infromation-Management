@@ -137,7 +137,6 @@ def save_data(table_name, df):
 # ==========================================
 
 if menu == "1. 自檢表":
-    # --- 頁面標題與單位資訊 ---
     st.markdown("### 🛡️ 個資管理工作自檢表")
     
     header_col1, header_col2, header_col3 = st.columns(3)
@@ -168,7 +167,7 @@ if menu == "1. 自檢表":
         use_container_width=True,
         key="self_check_editor",
         column_config={
-            "id": st.column_config.Column("系統編號", disabled=True, hidden=True),
+            "id": None,  # 隱藏資料庫主鍵 ID，避免使用者修改
             "item_no": st.column_config.TextColumn("項次", help="請手動輸入序號 (例如 1, 2...)"),
             "unit_name": st.column_config.TextColumn("單位名稱"),
             "project_name": st.column_config.TextColumn("業務名稱", placeholder="請輸入業務或專案名稱"),
@@ -191,12 +190,10 @@ if menu == "1. 自檢表":
     btn_col1, btn_col2 = st.columns([1, 6])
     with btn_col1:
         if st.button("💾 儲存盤點結果"):
-            # 存檔前：如果使用者新增了列卻沒打單位，系統自動補上當前登入單位
             if "unit_name" in edited_df.columns:
                 edited_df["unit_name"] = edited_df["unit_name"].replace(["", None], user_unit)
             save_data("self_checklist", edited_df)
     with btn_col2:
-        # 下載功能
         csv = edited_df.to_csv(index=False).encode('utf-8-sig')
         st.download_button(
             label="📥 匯出 CSV 檔",
@@ -216,7 +213,7 @@ elif menu == "2. 個資清冊":
                      "聯絡方式", "財務情況", "社會活動", "車籍資料", "其他"]
     
     column_config_dict = {
-        "id": st.column_config.Column("編號", disabled=True, hidden=True),
+        "id": None,  # 隱藏資料庫主鍵 ID
         "unit_name": st.column_config.TextColumn("所屬單位", disabled=not is_admin),
         # I. 單位及業務流程資訊
         "dept_name": "I.部名稱",
@@ -302,7 +299,7 @@ elif menu == "3. 風險評鑑表":
         num_rows="dynamic",
         use_container_width=True,
         column_config={
-            "id": st.column_config.Column("系統編號", disabled=True, hidden=True),
+            "id": None,  # 隱藏資料庫主鍵 ID
             "unit_name": st.column_config.TextColumn("單位", disabled=not is_admin),
             "project_name": "業務子流程名稱",
             "score_1": st.column_config.NumberColumn("(1)數量", min_value=1, max_value=5, step=1),
@@ -315,7 +312,6 @@ elif menu == "3. 風險評鑑表":
     
     if not edited_df.empty and 'score_1' in edited_df.columns:
         score_cols = ['score_1', 'score_2', 'score_3', 'score_4', 'score_5']
-        # 自動計算分數
         edited_df['total_score'] = edited_df[score_cols].sum(axis=1)
         edited_df['risk_level'] = edited_df['total_score'].apply(
             lambda x: '高' if pd.notnull(x) and x >= 18 else ('中' if pd.notnull(x) and x >= 10 else '低')
@@ -341,7 +337,7 @@ elif menu == "4. 委外廠商清冊":
         num_rows="dynamic",
         use_container_width=True,
         column_config={
-            "id": st.column_config.Column("系統編號", disabled=True, hidden=True),
+            "id": None,  # 隱藏資料庫主鍵 ID
             "unit_name": st.column_config.TextColumn("單位", disabled=not is_admin),
             "vendor_name": "廠商名稱",
             "file_name": "個資檔案名稱",
