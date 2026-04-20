@@ -49,7 +49,9 @@ COLLECT_METHOD_OPTIONS = ["直接蒐集", "間接蒐集"]
 def generate_excel(df, rename_dict, color_rules, sheet_name="Sheet1"):
     """將 DataFrame 轉為帶有顏色標頭的 Excel 檔案"""
     export_df = df.copy()
-    export_df = export_df[[col for col in rename_dict.keys() if col in export_df.columns]]
+    # 嚴格依照 rename_dict 的順序來排列 Excel 欄位
+    ordered_cols = [col for col in rename_dict.keys() if col in export_df.columns]
+    export_df = export_df[ordered_cols]
     export_df = export_df.rename(columns=rename_dict)
     
     output = io.BytesIO()
@@ -58,7 +60,6 @@ def generate_excel(df, rename_dict, color_rules, sheet_name="Sheet1"):
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
         
-        # 定義 Excel 標頭顏色樣式
         formats = {
             "default": workbook.add_format({'bg_color': '#F2F2F2', 'border': 1, 'bold': True}), 
             "blue": workbook.add_format({'bg_color': '#D9E1F2', 'border': 1, 'bold': True}),    
@@ -152,25 +153,32 @@ if menu == "1. 自檢表":
     st.markdown("🟦 `基本資訊` | 🟧 `委外管理` | 🟩 `結案專用`")
     
     df = load_data("self_checklist")
-    expected_cols = ["id", "item_no", "project_name", "owner", "status", "pi_inventory_done", "vendor_mgmt_done", "vendor_name", "form_d001", "form_d002", "form_d003", "pi_destroyed", "unit_name"]
-    for col in expected_cols:
+    
+    # 嚴格定義顯示順序
+    chk_order = [
+        "item_no", "unit_name", "project_name", "owner", "status", 
+        "pi_inventory_done", "vendor_mgmt_done", "vendor_name", 
+        "form_d001", "form_d002", "form_d003", "pi_destroyed"
+    ]
+    for col in chk_order:
         if col not in df.columns: df[col] = None
 
     edited_df = st.data_editor(
         df,
         num_rows="dynamic",
         use_container_width=True,
+        column_order=chk_order, # 強制鎖定 UI 顯示順序
         column_config={
             "id": None,
             "item_no": st.column_config.TextColumn("項次", help="請輸入序號"),
             "unit_name": st.column_config.TextColumn("單位名稱"),
             "project_name": st.column_config.TextColumn("業務名稱", help="請填寫專案名稱"),
-            "owner": st.column_config.TextColumn("負責人"),
-            "status": st.column_config.SelectboxColumn("狀態", options=YN_OPTIONS), # 依照需求改為 Y/N
-            "pi_inventory_done": st.column_config.SelectboxColumn("清冊建檔", options=YN_OPTIONS),
-            "vendor_mgmt_done": st.column_config.SelectboxColumn("委外管理", options=YN_OPTIONS),
+            "owner": st.column_config.TextColumn("業務負責人"),
+            "status": st.column_config.SelectboxColumn("業務狀態", options=YN_OPTIONS), 
+            "pi_inventory_done": st.column_config.SelectboxColumn("個資清冊建檔", options=YN_OPTIONS),
+            "vendor_mgmt_done": st.column_config.SelectboxColumn("委外廠商個資管理", options=YN_OPTIONS),
             
-            "vendor_name": st.column_config.TextColumn("🟧廠商名稱", help="【委外管理】請填寫委外廠商名稱"),
+            "vendor_name": st.column_config.TextColumn("🟧委外廠商名稱", help="【委外管理】請填寫委外廠商名稱"),
             "form_d001": st.column_config.SelectboxColumn("🟧D001清冊", options=YN_OPTIONS, help="【委外管理】D001 委外檔案清冊是否完成"),
             "form_d002": st.column_config.SelectboxColumn("🟧D002存取單", options=YN_OPTIONS, help="【委外管理】D002 存取單是否完成"),
             "form_d003": st.column_config.SelectboxColumn("🟧D003銷毀單", options=YN_OPTIONS, help="【委外管理】D003 銷毀單是否完成"),
@@ -186,8 +194,8 @@ if menu == "1. 自檢表":
     with col2:
         rename_dict = {
             "item_no": "項次", "unit_name": "單位名稱", "project_name": "業務名稱",
-            "owner": "負責人", "status": "狀態", "pi_inventory_done": "清冊建檔",
-            "vendor_mgmt_done": "委外管理", "vendor_name": "委外廠商名稱",
+            "owner": "業務負責人", "status": "業務狀態", "pi_inventory_done": "個資清冊建檔",
+            "vendor_mgmt_done": "委外廠商個資管理", "vendor_name": "委外廠商名稱",
             "form_d001": "D001清冊", "form_d002": "D002存取單",
             "form_d003": "D003銷毀單", "pi_destroyed": "個資已銷毀"
         }
@@ -200,105 +208,116 @@ if menu == "1. 自檢表":
 
 elif menu == "2. 個資清冊":
     st.markdown("### 📁 個資與機敏檔案清冊")
-    st.markdown("🟦`基本資訊` 🟩`個資範圍` 🟧`使用` 🟨`傳送` 🟪`儲存` ⬜`刪除` 🟥`國際傳輸` (滑鼠移至標題看說明)")
+    st.markdown("🟦`基本資訊` 🟩`個資範圍` 🟧`使用` 🟨`傳送` 🟪`儲存` ⬜`刪除` 🟥`國際傳輸`")
     
     df = load_data("pi_inventory")
     
-    # 完整補齊使用者要求的 20 個範圍欄位
     pi_scope_cols = ["姓名", "出生年月日", "身分證號碼", "護照號碼", "特徵", "指紋", "婚姻", "家庭", 
                      "教育職業", "病歷", "醫療", "基因", "性生活", "健康檢查", "犯罪前科", 
                      "聯絡方式", "財務情況", "社會活動", "車籍資料", "其他"]
     
+    # 嚴格定義顯示順序 (完全對齊您的要求)
+    pi_order = [
+        "unit_name", "dept_name", "room_name", "pi_manager", "process_desc", # I
+        "pi_amount", "legal_rule", "pi_purpose", "pi_category"               # II 前半
+    ]
+    pi_order.extend([f"scope_{col}" for col in pi_scope_cols])               # II 範圍
+    pi_order.extend(["legal_basis", "collect_method"])                       # II 後半
+    pi_order.extend([                                                        # III
+        "sys_name", "sys_source",
+        "use_target", "use_purpose", "use_method", "use_protect",
+        "trans_target", "trans_purpose", "trans_method", "trans_protect",
+        "store_loc", "store_legal_time", "store_inner_time", "store_protect",
+        "del_method", "del_unit",
+        "intl_country", "intl_target", "intl_purpose", "intl_method", "intl_protect"
+    ])
+    
+    for col in pi_order:
+        if col not in df.columns: df[col] = None
+
     col_cfg = {
         "id": None,
-        # I. 單位及業務流程資訊
         "unit_name": st.column_config.TextColumn("🟦所屬單位"),
         "dept_name": st.column_config.TextColumn("🟦部名稱"),
         "room_name": st.column_config.TextColumn("🟦室名稱"),
-        "pi_manager": st.column_config.TextColumn("🟦檔案管理者"),
-        "process_desc": st.column_config.TextColumn("🟦流程說明"),
+        "pi_manager": st.column_config.TextColumn("🟦個資檔案管理者"),
+        "process_desc": st.column_config.TextColumn("🟦業務流程說明"),
         
-        # II. 個人資料資訊
         "pi_amount": st.column_config.SelectboxColumn("🟩筆數/份數", options=PI_AMOUNT_OPTIONS),
         "legal_rule": st.column_config.TextColumn("🟩法源/內部規範依據"),
         "pi_purpose": st.column_config.SelectboxColumn("🟩特定目的", options=PI_PURPOSE_OPTIONS),
         "pi_category": st.column_config.SelectboxColumn("🟩個資之類別", options=PI_CATEGORY_OPTIONS),
+        
+        # 範圍在此插入...
+        
         "legal_basis": st.column_config.SelectboxColumn("🟩合法蒐集依據", options=LEGAL_BASIS_OPTIONS),
         "collect_method": st.column_config.SelectboxColumn("🟩蒐集方式", options=COLLECT_METHOD_OPTIONS),
         
-        # III. 生命週期 - 系統與來源
         "sys_name": st.column_config.TextColumn("🟦應用系統名稱"),
         "sys_source": st.column_config.TextColumn("🟦來源"),
         
-        # III. 生命週期 - 使用
-        "use_target": st.column_config.TextColumn("🟧使用對象", help="【使用】"),
-        "use_purpose": st.column_config.TextColumn("🟧使用目的", help="【使用】"),
-        "use_method": st.column_config.TextColumn("🟧使用方式", help="【使用】"),
-        "use_protect": st.column_config.TextColumn("🟧保護方式", help="【使用】"),
+        "use_target": st.column_config.TextColumn("🟧使用對象"),
+        "use_purpose": st.column_config.TextColumn("🟧使用目的"),
+        "use_method": st.column_config.TextColumn("🟧使用方式"),
+        "use_protect": st.column_config.TextColumn("🟧保護方式"),
         
-        # III. 生命週期 - 傳送
-        "trans_target": st.column_config.TextColumn("🟨傳送對象", help="【傳送】"),
-        "trans_purpose": st.column_config.TextColumn("🟨傳送目的", help="【傳送】"),
-        "trans_method": st.column_config.TextColumn("🟨傳送方式", help="【傳送】"),
-        "trans_protect": st.column_config.TextColumn("🟨保護方式", help="【傳送】"),
+        "trans_target": st.column_config.TextColumn("🟨傳送對象"),
+        "trans_purpose": st.column_config.TextColumn("🟨傳送目的"),
+        "trans_method": st.column_config.TextColumn("🟨傳送方式"),
+        "trans_protect": st.column_config.TextColumn("🟨保護方式"),
         
-        # III. 生命週期 - 儲存
-        "store_loc": st.column_config.TextColumn("🟪儲存位置", help="【儲存】"),
-        "store_legal_time": st.column_config.TextColumn("🟪法定保留時限", help="【儲存】"),
-        "store_inner_time": st.column_config.TextColumn("🟪內部保存期限", help="【儲存】"),
-        "store_protect": st.column_config.TextColumn("🟪保護措施", help="【儲存】"),
+        "store_loc": st.column_config.TextColumn("🟪儲存位置"),
+        "store_legal_time": st.column_config.TextColumn("🟪法定保留時限"),
+        "store_inner_time": st.column_config.TextColumn("🟪內部保存期限"),
+        "store_protect": st.column_config.TextColumn("🟪保護措施"),
         
-        # III. 生命週期 - 刪除
-        "del_method": st.column_config.TextColumn("⬜刪除/銷毀方式", help="【刪除】"),
-        "del_unit": st.column_config.TextColumn("⬜刪除/銷毀單位", help="【刪除】"),
+        "del_method": st.column_config.TextColumn("⬜刪除/銷毀方式"),
+        "del_unit": st.column_config.TextColumn("⬜刪除/銷毀單位"),
         
-        # III. 生命週期 - 國際傳輸
-        "intl_country": st.column_config.TextColumn("🟥傳送國家", help="【國際傳輸】"),
-        "intl_target": st.column_config.TextColumn("🟥傳送對象", help="【國際傳輸】"),
-        "intl_purpose": st.column_config.TextColumn("🟥傳送目的", help="【國際傳輸】"),
-        "intl_method": st.column_config.TextColumn("🟥傳送方式", help="【國際傳輸】"),
-        "intl_protect": st.column_config.TextColumn("🟥保護方式", help="【國際傳輸】")
+        "intl_country": st.column_config.TextColumn("🟥傳送國家"),
+        "intl_target": st.column_config.TextColumn("🟥傳送對象"),
+        "intl_purpose": st.column_config.TextColumn("🟥傳送目的"),
+        "intl_method": st.column_config.TextColumn("🟥傳送方式"),
+        "intl_protect": st.column_config.TextColumn("🟥保護方式")
     }
     
     for col in pi_scope_cols:
         col_cfg[f"scope_{col}"] = st.column_config.SelectboxColumn(f"🟩{col}", options=YN_OPTIONS, help="【個資範圍】是否包含此資料")
 
-    for c in col_cfg.keys():
-        if c not in df.columns: df[c] = None
-
-    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_config=col_cfg)
+    edited_df = st.data_editor(
+        df, 
+        num_rows="dynamic", 
+        use_container_width=True, 
+        column_order=pi_order, # 強制鎖定 UI 顯示順序
+        column_config=col_cfg
+    )
     
     col1, col2 = st.columns([1, 6])
     with col1:
         if st.button("💾 儲存個資清冊"): save_data("pi_inventory", edited_df)
     with col2:
-        # Excel 匯出欄位對應與顏色標定
+        # Excel 匯出字典 (已依照順序排列)
         rename_dict = {
             "unit_name": "所屬單位", "dept_name": "I.部名稱", "room_name": "I.室名稱", 
             "pi_manager": "I.個資檔案管理者", "process_desc": "I.業務流程說明",
-            
             "pi_amount": "II.筆數/份數", "legal_rule": "II.法源/內部規範依據",
-            "pi_purpose": "II.特定目的", "pi_category": "II.個資之類別",
+            "pi_purpose": "II.特定目的", "pi_category": "II.個資之類別"
+        }
+        for col in pi_scope_cols: rename_dict[f"scope_{col}"] = f"[範圍]{col}"
+        
+        rename_dict.update({
             "legal_basis": "II.合法蒐集依據", "collect_method": "II.蒐集方式",
-            
             "sys_name": "III.應用系統名稱", "sys_source": "III.來源",
-            
             "use_target": "[使用]對象", "use_purpose": "[使用]目的", 
             "use_method": "[使用]方式", "use_protect": "[使用]保護方式",
-            
             "trans_target": "[傳送]對象", "trans_purpose": "[傳送]目的", 
             "trans_method": "[傳送]方式", "trans_protect": "[傳送]保護方式",
-            
             "store_loc": "[儲存]位置", "store_legal_time": "[儲存]法定保留時限",
             "store_inner_time": "[儲存]內部保存期限", "store_protect": "[儲存]保護措施",
-            
             "del_method": "[刪除]銷毀方式", "del_unit": "[刪除]銷毀單位",
-            
             "intl_country": "[國際]國家", "intl_target": "[國際]對象",
             "intl_purpose": "[國際]目的", "intl_method": "[國際]方式", "intl_protect": "[國際]保護方式"
-        }
-        
-        for col in pi_scope_cols: rename_dict[f"scope_{col}"] = f"[範圍]{col}"
+        })
         
         color_rules = {
             "blue": ["所屬單位", "I.部名稱", "I.室名稱", "I.個資檔案管理者", "I.業務流程說明", "III.應用系統名稱", "III.來源"],
@@ -322,6 +341,7 @@ elif menu == "3. 風險評鑑表":
             
     edited_df = st.data_editor(
         df, num_rows="dynamic", use_container_width=True,
+        column_order=["unit_name", "project_name", "score_1", "score_2", "score_3", "score_4", "score_5"],
         column_config={
             "id": None,
             "unit_name": st.column_config.TextColumn("單位", disabled=not is_admin),
@@ -356,6 +376,7 @@ elif menu == "4. 委外廠商清冊":
             
     edited_df = st.data_editor(
         df, num_rows="dynamic", use_container_width=True,
+        column_order=["unit_name", "vendor_name", "file_name", "pi_scope", "trans_purpose", "trans_method"],
         column_config={
             "id": None,
             "unit_name": st.column_config.TextColumn("單位", disabled=not is_admin),
