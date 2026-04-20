@@ -125,31 +125,44 @@ is_admin = (user_unit == "總管理員")
 menu = st.sidebar.radio("📂 功能選單", ["1. 自檢表", "2. 個資清冊", "3. 風險評鑑", "4. 委外廠商", "5. 組織管理"] if is_admin else ["1. 自檢表", "2. 個資清冊", "3. 風險評鑑", "4. 委外廠商"])
 
 def load_data(table):
-    """資料讀取：實作嚴格的資料隔離"""
     query = supabase.table(table).select("*")
-    if not is_admin:
-        query = query.eq("unit_name", user_unit) # 非管理員只能抓自己的單位
+    if not is_admin: query = query.eq("unit_name", user_unit)
     res = query.execute().data
-    return pd.DataFrame(res or [])
+    df = pd.DataFrame(res or [])
+    # 加入刪除核取方塊的預設欄位
+    df["🗑️ 刪除"] = False 
+    return df
 
 def save_data(table, edited_df, original_df):
-    """資料存檔：背景自動掛載單位名稱、清理無效資料"""
+    """資料存檔：支援打勾刪除、自動掛載單位與防呆"""
+    # 1. 處理「打勾刪除」邏輯
+    if "🗑️ 刪除" in edited_df.columns:
+        to_del_df = edited_df[edited_df["🗑️ 刪除"] == True]
+        if not to_del_df.empty and "id" in to_del_df.columns:
+            del_ids = to_del_df["id"].dropna().astype(str).tolist()
+            if del_ids:
+                supabase.table(table).delete().in_("id", del_ids).execute()
+        # 濾掉已刪除的，並拔掉刪除欄位準備 upsert
+        edited_df = edited_df[edited_df["🗑️ 刪除"] == False].drop(columns=["🗑️ 刪除"])
+
+    # 2. 處理「原生刪除」邏輯 (若使用者按了 Delete 鍵)
     if not original_df.empty and "id" in original_df.columns:
-        deleted = list(set(original_df["id"].dropna().astype(str)) - set(edited_df["id"].dropna().astype(str)))
+        orig_ids = set(original_df["id"].dropna().astype(str).tolist())
+        edit_ids = set(edited_df["id"].dropna().astype(str).tolist())
+        deleted = list(orig_ids - edit_ids)
         if deleted: supabase.table(table).delete().in_("id", deleted).execute()
 
-    # 自動補齊 unit_name
-    if not is_admin:
+    # 3. 自動補齊 unit_name
+    if not is_admin and table not in ["departments", "units"]:
         edited_df["unit_name"] = user_unit
 
     records = edited_df.where(pd.notnull(edited_df), None).to_dict(orient="records")
     
     valid = []
     for r in records:
-        meaningful_keys = [k for k in r.keys() if k not in ['id', 'unit_name']]
+        meaningful_keys = [k for k in r.keys() if k not in ['id', 'unit_name', '🗑️ 刪除']]
         if any(r[k] is not None and str(r[k]).strip() != "" for k in meaningful_keys):
-            if pd.isna(r.get('id')):
-                r.pop('id', None)
+            if pd.isna(r.get('id')): r.pop('id', None)
             valid.append(r)
             
     if valid:
@@ -160,7 +173,7 @@ def save_data(table, edited_df, original_df):
         except Exception as e:
             st.error(f"存檔失敗：{e}")
     else:
-        st.toast("✅ 變更已套用", icon="🗑️")
+        st.toast("✅ 變更已套用 (含刪除)", icon="🗑️")
         return True
     return False
 
@@ -170,31 +183,24 @@ def save_data(table, edited_df, original_df):
 
 if menu == "1. 自檢表":
     st.markdown("### 🛡️ 自檢表管理")
-    if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
-    else:
-        st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
+    if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
+    else: st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
     df = load_data("self_checklist")
     
-    cols = ["item_no", "unit_name", "project_name", "owner", "status", "pi_inventory_done", "vendor_mgmt_done", "vendor_name", "form_d001", "form_d002", "form_d003", "pi_destroyed"]
+    cols = ["🗑️ 刪除", "item_no", "unit_name", "project_name", "owner", "status", "pi_inventory_done", "vendor_mgmt_done", "vendor_name", "form_d001", "form_d002", "form_d003", "pi_destroyed"]
     for c in cols: 
-        if c not in df.columns: df[c] = None
+        if c not in df.columns: df[c] = None if c != "🗑️ 刪除" else False
 
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=cols, column_config={
-        "id": None, 
-        "item_no": "🟦項次", 
-        "unit_name": st.column_config.TextColumn("🟦單位", disabled=not is_admin),
-        "project_name": "🟦業務名稱", 
-        "owner": "🟦負責人", 
-        "status": st.column_config.SelectboxColumn("🟦狀態", options=YN_OPTIONS),
+        "id": None, "🗑️ 刪除": st.column_config.CheckboxColumn("🗑️ 刪除", default=False),
+        "item_no": "🟦項次", "unit_name": st.column_config.TextColumn("🟦單位", disabled=not is_admin),
+        "project_name": "🟦業務名稱", "owner": "🟦負責人", "status": st.column_config.SelectboxColumn("🟦狀態", options=YN_OPTIONS),
         "pi_inventory_done": st.column_config.SelectboxColumn("🟦清冊建檔", options=YN_OPTIONS),
         "vendor_mgmt_done": st.column_config.SelectboxColumn("🟦委外管理", options=YN_OPTIONS),
-        "vendor_name": "🟧廠商名稱",
-        "form_d001": st.column_config.SelectboxColumn("🟧D001", options=YN_OPTIONS),
-        "form_d002": st.column_config.SelectboxColumn("🟧D002", options=YN_OPTIONS),
-        "form_d003": st.column_config.SelectboxColumn("🟧D003", options=YN_OPTIONS),
-        "pi_destroyed": st.column_config.SelectboxColumn("🟩個資已銷毀", options=YN_OPTIONS, help="專案已結束需填寫")
+        "vendor_name": "🟧廠商名稱", "form_d001": st.column_config.SelectboxColumn("🟧D001", options=YN_OPTIONS),
+        "form_d002": st.column_config.SelectboxColumn("🟧D002", options=YN_OPTIONS), "form_d003": st.column_config.SelectboxColumn("🟧D003", options=YN_OPTIONS),
+        "pi_destroyed": st.column_config.SelectboxColumn("🟩個資已銷毀", options=YN_OPTIONS)
     })
     
     c1, c2 = st.columns([1, 6])
@@ -209,27 +215,22 @@ if menu == "1. 自檢表":
 
 elif menu == "2. 個資清冊":
     st.markdown("### 📁 個資與機敏檔案清冊")
-    if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
-    else:
-        st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
+    if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
+    else: st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
     df = load_data("pi_inventory")
     
     scopes = ["姓名", "出生年月日", "身分證號碼", "護照號碼", "特徵", "指紋", "婚姻", "家庭", "教育職業", "病歷", "醫療", "基因", "性生活", "健康檢查", "犯罪前科", "聯絡方式", "財務情況", "社會活動", "車籍資料", "其他"]
-    
-    # 移除 unit_name，讓畫面不再顯示所屬單位
-    order = ["dept_name", "room_name", "pi_manager", "process_desc", "pi_amount", "legal_rule", "pi_purpose", "pi_category"]
+    order = ["🗑️ 刪除", "unit_name", "dept_name", "room_name", "pi_manager", "process_desc", "pi_amount", "legal_rule", "pi_purpose", "pi_category"]
     order += [f"scope_{s}" for s in scopes]
     order += ["legal_basis", "collect_method", "sys_name", "sys_source", "use_target", "use_purpose", "use_method", "use_protect", "trans_target", "trans_purpose", "trans_method", "trans_protect", "store_loc", "store_legal_time", "store_inner_time", "store_protect", "del_method", "del_unit", "intl_country", "intl_target", "intl_purpose", "intl_method", "intl_protect"]
     
     for c in order:
-        if c not in df.columns: df[c] = None
+        if c not in df.columns: df[c] = None if c != "🗑️ 刪除" else False
 
     cfg = {
-        "id": None, 
-        "unit_name": None, # 徹底隱藏所屬單位
-        "dept_name": st.column_config.SelectboxColumn("🟦部名稱", options=dept_list), # 部名稱設定為下拉選單
+        "id": None, "unit_name": None, "🗑️ 刪除": st.column_config.CheckboxColumn("🗑️ 刪除", default=False),
+        "dept_name": st.column_config.SelectboxColumn("🟦部名稱", options=dept_list),
         "room_name": st.column_config.SelectboxColumn("🟦室名稱", options=unit_list),
         "pi_manager": "🟦個資檔案管理者", "process_desc": "🟦業務流程說明",
         "pi_amount": st.column_config.SelectboxColumn("🟩筆數/份數", options=PI_AMOUNT_OPTIONS),
@@ -268,19 +269,17 @@ elif menu == "2. 個資清冊":
 
 elif menu == "3. 風險評鑑":
     st.markdown("### ⚠️ 個人資料風險評鑑")
-    if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
-    else:
-        st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
+    if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
+    else: st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
     df = load_data("risk_assessment")
     score_cols = ["score_1", "score_2", "score_3", "score_4", "score_5"]
-    cols = ["unit_name", "project_name"] + score_cols
+    cols = ["🗑️ 刪除", "unit_name", "project_name"] + score_cols
     for c in cols: 
-        if c not in df.columns: df[c] = 1 if 'score' in c else None
+        if c not in df.columns: df[c] = 1 if 'score' in c else None if c != "🗑️ 刪除" else False
 
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=cols, column_config={
-        "id": None, 
+        "id": None, "🗑️ 刪除": st.column_config.CheckboxColumn("🗑️ 刪除", default=False),
         "unit_name": st.column_config.TextColumn("🟦單位", disabled=not is_admin), 
         "project_name": "🟦業務名稱",
         "score_1": st.column_config.NumberColumn("🟨(1)數量", min_value=1, max_value=5), 
@@ -302,24 +301,19 @@ elif menu == "3. 風險評鑑":
 
 elif menu == "4. 委外廠商":
     st.markdown("### 🤝 委外廠商個資清冊")
-    if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
-    else:
-        st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
+    if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
+    else: st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
     df = load_data("vendor_inventory")
-    cols = ["unit_name", "vendor_name", "file_name", "pi_scope", "trans_purpose", "trans_method"]
+    cols = ["🗑️ 刪除", "unit_name", "vendor_name", "file_name", "pi_scope", "trans_purpose", "trans_method"]
     for c in cols:
-        if c not in df.columns: df[c] = None
+        if c not in df.columns: df[c] = None if c != "🗑️ 刪除" else False
 
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=cols, column_config={
-        "id": None, 
+        "id": None, "🗑️ 刪除": st.column_config.CheckboxColumn("🗑️ 刪除", default=False),
         "unit_name": st.column_config.TextColumn("🟦單位", disabled=not is_admin), 
-        "vendor_name": "🟦廠商名稱", 
-        "file_name": "🟦檔案名稱",
-        "pi_scope": "🟩個資範圍", 
-        "trans_purpose": "🟧傳送目的", 
-        "trans_method": "🟧傳送方式"
+        "vendor_name": "🟦廠商名稱", "file_name": "🟦檔案名稱",
+        "pi_scope": "🟩個資範圍", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式"
     })
     
     c1, c2 = st.columns([1, 6])
@@ -334,15 +328,38 @@ elif menu == "4. 委外廠商":
 
 elif menu == "5. 組織管理":
     st.markdown("### 🏢 組織架構管理")
+    
+    # 確保資料表也有打勾刪除的預設值
+    df_dept["🗑️ 刪除"] = False
+    df_unit["🗑️ 刪除"] = False
+
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("1. 部門 CRUD")
-        ed_d = st.data_editor(df_dept, num_rows="dynamic", use_container_width=True, column_config={"id":None, "dept_name":"🏢 部門名稱"})
+        ed_d = st.data_editor(
+            df_dept, num_rows="dynamic", use_container_width=True, 
+            column_order=["🗑️ 刪除", "dept_name"],
+            column_config={
+                "id": None, 
+                "🗑️ 刪除": st.column_config.CheckboxColumn("🗑️ 刪除", default=False),
+                "dept_name": st.column_config.TextColumn("🏢 部門名稱", required=True)
+            }
+        )
         if st.button("💾 存部門"):
             if save_data("departments", ed_d, df_dept): time.sleep(1); st.rerun()
+            
     with c2:
         st.subheader("2. 單位 CRUD")
-        ed_u = st.data_editor(df_unit, num_rows="dynamic", use_container_width=True, column_config={"id":None, "dept_name":st.column_config.SelectboxColumn("所屬部門", options=dept_list), "unit_name":"🏠 單位名稱"})
+        ed_u = st.data_editor(
+            df_unit, num_rows="dynamic", use_container_width=True, 
+            column_order=["🗑️ 刪除", "dept_name", "unit_name"],
+            column_config={
+                "id": None, 
+                "🗑️ 刪除": st.column_config.CheckboxColumn("🗑️ 刪除", default=False),
+                "dept_name": st.column_config.SelectboxColumn("所屬部門", options=dept_list, required=True), 
+                "unit_name": st.column_config.TextColumn("🏠 單位名稱", required=True)
+            }
+        )
         if st.button("💾 存單位"):
             if save_data("units", ed_u, df_unit): time.sleep(1); st.rerun()
 
