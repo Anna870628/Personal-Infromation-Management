@@ -133,43 +133,125 @@ def save_data(table_name, df):
 # ==========================================
 
 if menu == "1. 自檢表":
-    st.title("📋 個資管理工作自檢表")
-    st.caption("請確認各項業務的個資盤點進度。")
+    # --- 頁面標題與單位資訊 ---
+    st.markdown("### 🛡️ 個資管理工作自檢表")
     
+    # 模仿 Excel 頂部資訊欄位
+    header_col1, header_col2, header_col3 = st.columns(3)
+    with header_col1:
+        st.write(f"**單位：** {user_unit}")
+    with header_col2:
+        st.write("**日期：** 2026-04-20") # 可改為動態日期
+    with header_col3:
+        st.write("**狀態：** 盤點執行中")
+    
+    st.divider()
+
+    # 1. 讀取並預處理資料
     df = load_data("self_checklist")
     
-    # 確保 DataFrame 包含所有欄位，以免新增列時出錯
+    # 定義所有預期欄位 (對齊原檔 Excel 結構)
     expected_columns = [
-        "id", "unit_name", "project_name", "owner", "status", "pi_inventory_done",
-        "vendor_mgmt_done", "vendor_name", "form_d001", "form_d002", "form_d003", "pi_destroyed"
+        "item_no", "project_name", "owner", "status", "pi_inventory_done",
+        "vendor_mgmt_done", "vendor_name", "form_d001", "form_d002", "form_d003", "pi_destroyed", "unit_name"
     ]
+    
+    # 確保所有欄位都存在，且將 None 轉換為空白或預設值，避免顯示 None 字眼
     for col in expected_columns:
         if col not in df.columns:
-            df[col] = None
+            df[col] = ""
+    df = df.fillna("")
 
+    # 2. 資料編輯器配置 (模擬巢狀結構)
+    st.info("💡 點擊表格下方「+」新增業務，系統將自動套用預設格式。")
+    
     edited_df = st.data_editor(
         df,
         num_rows="dynamic",
         use_container_width=True,
+        key="self_check_editor",
         column_config={
-            "id": st.column_config.Column("編號", disabled=True),
-            "unit_name": st.column_config.TextColumn("單位", disabled=not is_admin),
-            "project_name": "業務名稱",
-            "owner": "業務負責人",
-            "status": st.column_config.SelectboxColumn("業務狀態", options=YN_OPTIONS),
-            "pi_inventory_done": st.column_config.SelectboxColumn("個資清冊建檔", options=YN_OPTIONS),
-            "vendor_mgmt_done": st.column_config.SelectboxColumn("委外廠商個資管理", options=YN_OPTIONS),
-            "vendor_name": "委外廠商名稱",
-            "form_d001": st.column_config.SelectboxColumn("D001 委外檔案清冊", options=YN_OPTIONS),
-            "form_d002": st.column_config.SelectboxColumn("D002 委外存取單", options=YN_OPTIONS),
-            "form_d003": st.column_config.SelectboxColumn("D003 委外銷毀紀錄單", options=YN_OPTIONS),
-            "pi_destroyed": st.column_config.SelectboxColumn("個資已銷毀", options=YN_OPTIONS, help="專案已結束需填寫")
+            # --- 基本資訊區 ---
+            "item_no": st.column_config.TextColumn(
+                "項次", 
+                help="請手動輸入序號 (例如 1, 2...)", 
+                default="" 
+            ),
+            "unit_name": st.column_config.TextColumn(
+                "單位名稱", 
+                default=user_unit 
+            ),
+            "project_name": st.column_config.TextColumn(
+                "業務名稱", 
+                placeholder="請輸入業務或專案名稱",
+                default=""
+            ),
+            "owner": st.column_config.TextColumn(
+                "業務負責人", 
+                default=""
+            ),
+            "status": st.column_config.SelectboxColumn(
+                "業務狀態", 
+                options=["進行中", "已結案"],
+                default="進行中"
+            ),
+            "pi_inventory_done": st.column_config.SelectboxColumn(
+                "個資清冊建檔", 
+                options=["v", "-"],
+                default="-"
+            ),
+            "vendor_mgmt_done": st.column_config.SelectboxColumn(
+                "委外廠商個資管理", 
+                options=["有", "-"],
+                default="-"
+            ),
+
+            # --- [巢狀結構模擬] 委外管理區段 ---
+            "vendor_name": st.column_config.TextColumn(
+                "※委外管理 | 廠商名稱", 
+                help="若有委外廠商個資管理需填寫此欄位",
+                default=""
+            ),
+            "form_d001": st.column_config.SelectboxColumn(
+                "※委外管理 | D001 清冊", 
+                options=["v", "-"],
+                default="-"
+            ),
+            "form_d002": st.column_config.SelectboxColumn(
+                "※委外管理 | D002 存取單", 
+                options=["v", "-"],
+                default="-"
+            ),
+            "form_d003": st.column_config.SelectboxColumn(
+                "※委外管理 | D003 銷毀單", 
+                options=["v", "-"],
+                default="-"
+            ),
+
+            # --- 結案區段 ---
+            "pi_destroyed": st.column_config.SelectboxColumn(
+                "💡結案專用 | 個資已銷毀", 
+                options=["v", "-"],
+                help="專案已結束需填寫",
+                default="-"
+            )
         }
     )
-    
-    if st.button("💾 儲存自檢表變更"):
-        save_data("self_checklist", edited_df)
 
+    # 3. 儲存與功能按鈕
+    btn_col1, btn_col2 = st.columns([1, 6])
+    with btn_col1:
+        if st.button("💾 儲存盤點結果"):
+            save_data("self_checklist", edited_df)
+    with btn_col2:
+        # 下載功能，方便匯回 Excel
+        csv = edited_df.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="📥 匯出 CSV 檔",
+            data=csv,
+            file_name=f"個資自檢表_{user_unit}.csv",
+            mime="text/csv",
+        )
 elif menu == "2. 個資清冊":
     # 這裡的標題字串問題已經修正完成
     st.title("📁 個資與機敏檔案清冊")
