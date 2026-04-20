@@ -24,7 +24,6 @@ COLLECT_METHOD_OPTIONS = ["直接蒐集", "間接蒐集"]
 
 def generate_excel(df, rename_dict, color_rules, sheet_name="Sheet1"):
     """將 DataFrame 轉為帶有顏色標頭的 Excel 檔案"""
-    # 1. 篩選並重新命名欄位 (轉成中文)
     export_df = df.copy()
     export_df = export_df[[col for col in rename_dict.keys() if col in export_df.columns]]
     export_df = export_df.rename(columns=rename_dict)
@@ -35,9 +34,10 @@ def generate_excel(df, rename_dict, color_rules, sheet_name="Sheet1"):
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
         
-        # 2. 定義 Excel 標頭顏色樣式
+        # 定義 Excel 標頭顏色樣式 (已修復：補齊所有顏色名稱)
         formats = {
-            "default": workbook.add_format({'bg_color': '#D9E1F2', 'border': 1, 'bold': True}), # 淺藍
+            "default": workbook.add_format({'bg_color': '#F2F2F2', 'border': 1, 'bold': True}), # 預設淺灰
+            "blue": workbook.add_format({'bg_color': '#D9E1F2', 'border': 1, 'bold': True}),    # 淺藍
             "green": workbook.add_format({'bg_color': '#E2EFDA', 'border': 1, 'bold': True}),   # 淺綠
             "orange": workbook.add_format({'bg_color': '#FCE4D6', 'border': 1, 'bold': True}),  # 淺橘
             "yellow": workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'bold': True}),  # 淺黃
@@ -46,15 +46,19 @@ def generate_excel(df, rename_dict, color_rules, sheet_name="Sheet1"):
             "red": workbook.add_format({'bg_color': '#F2DCDB', 'border': 1, 'bold': True}),     # 淺紅
         }
         
-        # 3. 逐欄套用顏色
         for col_num, value in enumerate(export_df.columns.values):
             fmt_key = "default"
             for color, columns in color_rules.items():
                 if value in columns:
                     fmt_key = color
                     break
+            
+            # 防呆機制：如果寫錯顏色名稱，強制使用 default，確保程式不當機
+            if fmt_key not in formats:
+                fmt_key = "default"
+                
             worksheet.write(0, col_num, value, formats[fmt_key])
-            worksheet.set_column(col_num, col_num, 15) # 調整欄寬
+            worksheet.set_column(col_num, col_num, 15) 
             
     return output.getvalue()
 
@@ -115,7 +119,7 @@ def save_data(table_name, df):
         st.success("✅ 資料存檔成功！")
 
 # ==========================================
-# 7. 分頁實作 (加上短名稱與 Help 說明)
+# 7. 分頁實作
 # ==========================================
 
 if menu == "1. 自檢表":
@@ -141,13 +145,11 @@ if menu == "1. 自檢表":
             "pi_inventory_done": st.column_config.SelectboxColumn("清冊建檔", options=["v", "-"]),
             "vendor_mgmt_done": st.column_config.SelectboxColumn("委外管理", options=["有", "-"]),
             
-            # 委外 (橘色)
             "vendor_name": st.column_config.TextColumn("🟧廠商名稱", help="【委外管理】請填寫委外廠商名稱"),
             "form_d001": st.column_config.SelectboxColumn("🟧D001", options=["v", "-"], help="【委外管理】D001 委外檔案清冊是否完成"),
             "form_d002": st.column_config.SelectboxColumn("🟧D002", options=["v", "-"], help="【委外管理】D002 存取單是否完成"),
             "form_d003": st.column_config.SelectboxColumn("🟧D003", options=["v", "-"], help="【委外管理】D003 銷毀單是否完成"),
             
-            # 結案 (綠色)
             "pi_destroyed": st.column_config.SelectboxColumn("🟩個資銷毀", options=["v", "-"], help="【結案專用】專案結束時需確認個資是否銷毀")
         }
     )
@@ -157,7 +159,6 @@ if menu == "1. 自檢表":
         if st.button("💾 儲存自檢表"):
             save_data("self_checklist", edited_df)
     with col2:
-        # Excel 匯出設定
         rename_dict = {
             "item_no": "項次", "unit_name": "單位名稱", "project_name": "業務名稱",
             "owner": "負責人", "status": "狀態", "pi_inventory_done": "清冊建檔",
@@ -179,7 +180,6 @@ elif menu == "2. 個資清冊":
     df = load_data("pi_inventory")
     pi_scope_cols = ["姓名", "出生日", "身分證", "護照", "聯絡方式", "財務", "車籍資料", "其他"]
     
-    # 網頁端縮短名稱與 Info 設定
     col_cfg = {
         "id": None,
         "unit_name": st.column_config.TextColumn("🟦所屬單位"),
@@ -215,7 +215,6 @@ elif menu == "2. 個資清冊":
     with col1:
         if st.button("💾 儲存個資清冊"): save_data("pi_inventory", edited_df)
     with col2:
-        # Excel 匯出設定 (還原完整的 Excel 巢狀標題名稱)
         rename_dict = {
             "unit_name": "所屬單位", "dept_name": "I.部名稱", "process_desc": "I.流程說明",
             "pi_purpose": "II.特定目的", "legal_basis": "II.合法依據",
