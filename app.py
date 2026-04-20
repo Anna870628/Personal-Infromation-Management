@@ -102,25 +102,30 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ==========================================
-# 3. 組織架構讀取 (加強防呆)
+# 3. 組織架構讀取 (修復空資料表無欄位 BUG)
 # ==========================================
-def load_org_data():
+def fetch_org_data():
     try:
-        depts_res = supabase.table("departments").select("*").execute()
-        units_res = supabase.table("units").select("*").execute()
-        return pd.DataFrame(depts_res.data), pd.DataFrame(units_res.data)
+        depts = supabase.table("departments").select("*").execute().data
+        units = supabase.table("units").select("*").execute().data
+        
+        # 關鍵修復：即使沒有資料，也強制建立具有正確欄位名稱的空 DataFrame
+        df_d = pd.DataFrame(depts) if depts else pd.DataFrame(columns=["id", "dept_name"])
+        df_u = pd.DataFrame(units) if units else pd.DataFrame(columns=["id", "dept_name", "unit_name"])
+        return df_d, df_u
     except Exception:
         return pd.DataFrame(columns=["id", "dept_name"]), pd.DataFrame(columns=["id", "dept_name", "unit_name"])
 
-df_dept, df_unit = load_org_data()
-dept_list = df_dept["dept_name"].tolist() if not df_dept.empty else ["請至管理員分頁建立部門"]
-unit_list = df_unit["unit_name"].tolist() if not df_unit.empty else ["請至管理員分頁建立單位"]
+df_dept, df_unit = fetch_org_data()
+dept_list = df_dept["dept_name"].dropna().unique().tolist() if not df_dept.empty else []
+unit_list = df_unit["unit_name"].dropna().unique().tolist() if not df_unit.empty else []
 
 # ==========================================
 # 5. 側邊欄與 CRUD 邏輯
 # ==========================================
 st.sidebar.title("👤 使用者管理")
-user_unit = st.sidebar.selectbox("登入單位", unit_list + ["總管理員"])
+available_units = unit_list + ["總管理員"] if unit_list else ["總管理員"]
+user_unit = st.sidebar.selectbox("登入單位", available_units)
 is_admin = (user_unit == "總管理員")
 
 menu_options = ["1. 自檢表", "2. 個資清冊", "3. 風險評鑑表", "4. 委外廠商清冊"]
@@ -135,38 +140,34 @@ def load_data(table_name):
     return pd.DataFrame(response.data)
 
 def save_data(table_name, edited_df, original_df):
-    """回傳 True 代表存檔成功，可用來觸發 rerun"""
-    is_success = False
-    
-    # 1. 處理刪除
-    if "id" in original_df.columns and "id" in edited_df.columns:
-        original_ids = set(original_df["id"].dropna().astype(str).tolist())
-        edited_ids = set(edited_df["id"].dropna().astype(str).tolist())
-        deleted_ids = list(original_ids - edited_ids)
-        if deleted_ids:
-            supabase.table(table_name).delete().in_("id", deleted_ids).execute()
+    """執行新增、修改、同步刪除"""
+    success = False
+    try:
+        # 1. 處理刪除
+        if "id" in original_df.columns and "id" in edited_df.columns:
+            original_ids = set(original_df["id"].dropna().astype(str).tolist())
+            edited_ids = set(edited_df["id"].dropna().astype(str).tolist())
+            deleted_ids = list(original_ids - edited_ids)
+            if deleted_ids:
+                supabase.table(table_name).delete().in_("id", deleted_ids).execute()
 
-    # 2. 自動掛載單位
-    if not is_admin and table_name not in ["departments", "units"]:
-        edited_df["unit_name"] = user_unit 
+        # 2. 自動掛載單位 (若非組織管理表)
+        if not is_admin and table_name not in ["departments", "units"]:
+            edited_df["unit_name"] = user_unit 
+            
+        upsert_df = edited_df.where(pd.notnull(edited_df), None)
+        records = upsert_df.to_dict(orient="records")
+        valid_records = [r for r in records if any(v is not None and str(v).strip() != "" for k, v in r.items() if k != 'id')]
         
-    upsert_df = edited_df.where(pd.notnull(edited_df), None)
-    records = upsert_df.to_dict(orient="records")
-    valid_records = [r for r in records if any(v is not None and str(v).strip() != "" for k, v in r.items() if k != 'id')]
-    
-    if valid_records:
-        try:
+        if valid_records:
             supabase.table(table_name).upsert(valid_records).execute()
-            st.toast("✅ 資料同步成功！", icon="🎉") # 改用 toast 提示
-            is_success = True
-        except Exception as e:
-            st.error(f"❌ 存檔失敗：{e}")
-    else:
-        # 如果只有刪除動作也算成功
-        st.toast("✅ 已更新資料狀態", icon="🗑️")
-        is_success = True
-        
-    return is_success
+            st.toast("✅ 資料同步成功！", icon="🎉")
+        else:
+            st.toast("✅ 已執行更新", icon="🗑️")
+        success = True
+    except Exception as e:
+        st.error(f"❌ 存檔失敗：{e}")
+    return success
 
 # ==========================================
 # 7. 各分頁實作
@@ -190,14 +191,16 @@ if menu == "1. 自檢表":
             "form_d003": st.column_config.SelectboxColumn("🟧D003", options=YN_OPTIONS), "pi_destroyed": st.column_config.SelectboxColumn("🟩個資已銷毀", options=YN_OPTIONS)
         }
     )
-    if st.button("💾 儲存自檢表"): save_data("self_checklist", edited_df, df)
+    if st.button("💾 儲存自檢表"):
+        if save_data("self_checklist", edited_df, df):
+            time.sleep(1) 
+            st.rerun()
 
 elif menu == "2. 個資清冊":
     st.markdown("### 📁 個資與機敏檔案清冊")
-    st.info("💡 提示：點擊最左側行號並按 Delete 鍵即可刪除該列資料。")
+    st.info("💡 提示：雙擊 (連點兩下) 儲存格即可編輯文字；點擊最左側行號並按 Delete 鍵即可刪除該列資料。")
     df = load_data("pi_inventory")
     pi_scope_cols = ["姓名", "出生年月日", "身分證號碼", "護照號碼", "特徵", "指紋", "婚姻", "家庭", "教育職業", "病歷", "醫療", "基因", "性生活", "健康檢查", "犯罪前科", "聯絡方式", "財務情況", "社會活動", "車籍資料", "其他"]
-    
     pi_order = ["dept_name", "room_name", "pi_manager", "process_desc", "pi_amount", "legal_rule", "pi_purpose", "pi_category"]
     pi_order.extend([f"scope_{col}" for col in pi_scope_cols])               
     pi_order.extend(["legal_basis", "collect_method", "sys_name", "sys_source", "use_target", "use_purpose", "use_method", "use_protect", "trans_target", "trans_purpose", "trans_method", "trans_protect", "store_loc", "store_legal_time", "store_inner_time", "store_protect", "del_method", "del_unit", "intl_country", "intl_target", "intl_purpose", "intl_method", "intl_protect"])
@@ -206,53 +209,74 @@ elif menu == "2. 個資清冊":
         if col not in df.columns: df[col] = None
 
     col_cfg = {
-        "id": None, "unit_name": None, 
+        "id": None, "unit_name": None,
         "dept_name": st.column_config.SelectboxColumn("🟦部名稱", options=dept_list),
         "room_name": st.column_config.SelectboxColumn("🟦室名稱", options=unit_list),
         "pi_amount": st.column_config.SelectboxColumn("🟩筆數/份數", options=PI_AMOUNT_OPTIONS),
         "pi_purpose": st.column_config.SelectboxColumn("🟩特定目的", options=PI_PURPOSE_OPTIONS),
         "pi_category": st.column_config.SelectboxColumn("🟩個資之類別", options=PI_CATEGORY_OPTIONS),
-        "legal_basis": st.column_config.SelectboxColumn("🟩合法蒐集依據", options=LEGAL_BASIS_OPTIONS),
+        "legal_basis": st.column_config.SelectboxColumn("🟩合法依據", options=LEGAL_BASIS_OPTIONS),
         "collect_method": st.column_config.SelectboxColumn("🟩蒐集方式", options=COLLECT_METHOD_OPTIONS)
     }
     for col in pi_scope_cols: col_cfg[f"scope_{col}"] = st.column_config.SelectboxColumn(f"🟩{col}", options=YN_OPTIONS)
 
     edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=pi_order, column_config=col_cfg)
-    if st.button("💾 儲存個資清冊"): save_data("pi_inventory", edited_df, df)
+    if st.button("💾 儲存個資清冊"):
+        if save_data("pi_inventory", edited_df, df):
+            time.sleep(1)
+            st.rerun()
 
 elif menu == "3. 風險評鑑表":
     st.markdown("### ⚠️ 個人資料風險評鑑")
     df = load_data("risk_assessment")
     st.data_editor(df, num_rows="dynamic", use_container_width=True) 
-    if st.button("💾 儲存評估"): save_data("risk_assessment", df, df)
+    if st.button("💾 儲存評估"):
+        if save_data("risk_assessment", df, df):
+            time.sleep(1)
+            st.rerun()
 
 elif menu == "4. 委外廠商清冊":
     st.markdown("### 🤝 委外廠商個資檔案清冊")
     df = load_data("vendor_inventory")
     st.data_editor(df, num_rows="dynamic", use_container_width=True) 
-    if st.button("💾 儲存清冊"): save_data("vendor_inventory", df, df)
+    if st.button("💾 儲存清冊"):
+        if save_data("vendor_inventory", df, df):
+            time.sleep(1)
+            st.rerun()
 
 elif menu == "5. 組織架構管理 (管理員)":
     st.markdown("### 🏢 組織架構管理")
-    if df_dept.empty:
-        st.warning("⚠️ 偵測到資料庫尚無部門資料，或 API 快取尚未同步。請先確保已執行 SQL 語法。")
-        if st.button("🔄 強制重新讀取"): st.rerun()
-
+    st.info("💡 提示：點擊下方 `+` 新增列後，對著顯示 `None` 的格子 **連點兩下 (雙擊)** 即可開始打字輸入！")
+    
     col_dept, col_unit = st.columns(2)
     with col_dept:
         st.subheader("1. 部門管理")
-        edited_dept = st.data_editor(df_dept, num_rows="dynamic", use_container_width=True, column_config={"id": None, "dept_name": "🏢 部門名稱"})
-        if st.button("💾 儲存部門"): 
+        edited_dept = st.data_editor(
+            df_dept, num_rows="dynamic", use_container_width=True, 
+            column_config={
+                "id": None, 
+                "dept_name": st.column_config.TextColumn("🏢 部門名稱", required=True)
+            }
+        )
+        if st.button("💾 儲存部門異動"):
             if save_data("departments", edited_dept, df_dept):
-                time.sleep(0.5) # 稍微暫停讓資料庫寫入完成
-                st.rerun()      # 強制刷新畫面，更新下拉選單
+                time.sleep(1.5)
+                st.rerun()
 
     with col_unit:
         st.subheader("2. 單位(室)管理")
-        edited_unit = st.data_editor(df_unit, num_rows="dynamic", use_container_width=True, column_config={"id": None, "dept_name": st.column_config.SelectboxColumn("所屬部門", options=dept_list), "unit_name": "🏠 單位名稱"})
-        if st.button("💾 儲存單位"): 
+        opts = dept_list if dept_list else ["(請先建立部門)"]
+        edited_unit = st.data_editor(
+            df_unit, num_rows="dynamic", use_container_width=True, 
+            column_config={
+                "id": None, 
+                "dept_name": st.column_config.SelectboxColumn("所屬部門", options=opts, required=True), 
+                "unit_name": st.column_config.TextColumn("🏠 單位名稱", required=True)
+            }
+        )
+        if st.button("💾 儲存單位異動"):
             if save_data("units", edited_unit, df_unit):
-                time.sleep(0.5)
+                time.sleep(1.5)
                 st.rerun()
 
 st.sidebar.divider()
