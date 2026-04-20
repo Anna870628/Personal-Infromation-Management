@@ -101,4 +101,81 @@ if menu == "1. 自檢表":
         save_data("self_checklist", edited_df)
 
 elif menu == "2. 個資清冊":
-    st.title("📁 個資與機敏
+    st.title("📁 個資與機敏檔案清冊")
+    st.caption("管理每個專案蒐集的個資範圍與用途。")
+    
+    df = load_data("pi_inventory")
+    
+    # 詳細個資類別欄位 (根據附件一/二優化)
+    edited_df = st.data_editor(
+        df,
+        num_rows="dynamic",
+        use_container_width=True,
+        column_config={
+            "process_desc": "業務流程說明",
+            "pi_purpose": "特定目的",
+            "pi_types": "個資範圍 (如：姓名/身分證/車籍)",
+            "source": "資料來源",
+            "storage_loc": "儲存位置",
+            "trans_method": "傳輸方式"
+        }
+    )
+    
+    if st.button("確認儲存清冊"):
+        save_data("pi_inventory", edited_df)
+
+elif menu == "3. 風險評鑑表":
+    st.title("⚠️ 個人資料風險評鑑")
+    st.caption("針對各專案進行外洩風險分數評估。")
+    
+    df = load_data("risk_assessment")
+    
+    # 自動計算總分邏輯
+    st.markdown("""
+    **評分標準：** 1(低) ~ 5(高)  
+    *(1)個資數量、(2)敏感度、(3)信譽損害、(4)隱私衝擊、(5)業務合作單位*
+    """)
+    
+    edited_df = st.data_editor(
+        df,
+        num_rows="dynamic",
+        use_container_width=True
+    )
+    
+    # 計算風險
+    if not edited_df.empty and 'score_1' in edited_df.columns:
+        score_cols = ['score_1', 'score_2', 'score_3', 'score_4', 'score_5']
+        edited_df['total_score'] = edited_df[score_cols].sum(axis=1)
+        edited_df['risk_level'] = edited_df['total_score'].apply(
+            lambda x: '高' if x >= 18 else ('中' if x >= 10 else '低')
+        )
+        st.dataframe(edited_df[["project_name", "total_score", "risk_level"]], use_container_width=True)
+
+    if st.button("儲存風險評估結果"):
+        save_data("risk_assessment", edited_df)
+
+elif menu == "4. 委外廠商清冊":
+    st.title("🤝 委外廠商個資檔案清冊")
+    st.caption("管理委外廠商可接觸到的個資範圍 (例如：勤崴國際等)。")
+    
+    df = load_data("vendor_inventory")
+    
+    edited_df = st.data_editor(
+        df,
+        num_rows="dynamic",
+        use_container_width=True,
+        column_config={
+            "vendor_name": "廠商名稱",
+            "file_name": "個資檔案名稱",
+            "pi_scope": "個資範圍",
+            "trans_purpose": "傳送目的",
+            "trans_method": "傳送方式"
+        }
+    )
+    
+    if st.button("儲存廠商資料"):
+        save_data("vendor_inventory", edited_df)
+
+# 8. 頁尾資訊
+st.sidebar.divider()
+st.sidebar.caption("© 2026 Carmax Co., Ltd. 版權所有")
