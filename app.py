@@ -53,12 +53,12 @@ def generate_excel(df, rename_dict, color_rules):
         worksheet = writer.sheets['Sheet1']
         
         formats = {
-            "blue": workbook.add_format({'bg_color': '#D9E1F2', 'border': 1, 'bold': True}),   # 🟦
-            "green": workbook.add_format({'bg_color': '#E2EFDA', 'border': 1, 'bold': True}),  # 🟩
-            "orange": workbook.add_format({'bg_color': '#FCE4D6', 'border': 1, 'bold': True}), # 🟧
-            "yellow": workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'bold': True}), # 🟨
-            "purple": workbook.add_format({'bg_color': '#E1DFED', 'border': 1, 'bold': True}), # 🟪
-            "red": workbook.add_format({'bg_color': '#F2DCDB', 'border': 1, 'bold': True}),    # 🟥
+            "blue": workbook.add_format({'bg_color': '#D9E1F2', 'border': 1, 'bold': True}),   
+            "green": workbook.add_format({'bg_color': '#E2EFDA', 'border': 1, 'bold': True}),  
+            "orange": workbook.add_format({'bg_color': '#FCE4D6', 'border': 1, 'bold': True}), 
+            "yellow": workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'bold': True}), 
+            "purple": workbook.add_format({'bg_color': '#E1DFED', 'border': 1, 'bold': True}), 
+            "red": workbook.add_format({'bg_color': '#F2DCDB', 'border': 1, 'bold': True}),    
         }
         
         for col_num, value in enumerate(export_df.columns.values):
@@ -133,23 +133,24 @@ def load_data(table):
     return pd.DataFrame(res or [])
 
 def save_data(table, edited_df, original_df):
-    """資料存檔：背景自動掛載單位名稱並處理刪除"""
-    # 處理刪除邏輯
+    """資料存檔：背景自動掛載單位名稱、清理無效資料"""
     if not original_df.empty and "id" in original_df.columns:
         deleted = list(set(original_df["id"].dropna().astype(str)) - set(edited_df["id"].dropna().astype(str)))
         if deleted: supabase.table(table).delete().in_("id", deleted).execute()
 
-    # 自動補齊 unit_name (強迫所有新增資料打上標籤)
     if not is_admin:
         edited_df["unit_name"] = user_unit
 
     records = edited_df.where(pd.notnull(edited_df), None).to_dict(orient="records")
     
-    # 過濾完全空白的列，避免寫入垃圾資料
     valid = []
     for r in records:
         meaningful_keys = [k for k in r.keys() if k not in ['id', 'unit_name']]
-        if any(r[k] and str(r[k]).strip() != "" for k in meaningful_keys):
+        # 確保該列真的有填寫資料
+        if any(r[k] is not None and str(r[k]).strip() != "" for k in meaningful_keys):
+            # 若為新增資料，id 是 None/NaN，需將其從字典中移除，交給資料庫自動生成
+            if pd.isna(r.get('id')):
+                r.pop('id', None)
             valid.append(r)
             
     if valid:
@@ -160,7 +161,7 @@ def save_data(table, edited_df, original_df):
         except Exception as e:
             st.error(f"存檔失敗：{e}")
     else:
-        st.toast("✅ 變更已套用 (含刪除操作)", icon="🗑️")
+        st.toast("✅ 變更已套用", icon="🗑️")
         return True
     return False
 
@@ -171,7 +172,7 @@ def save_data(table, edited_df, original_df):
 if menu == "1. 自檢表":
     st.markdown("### 🛡️ 自檢表管理")
     if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
+        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。可協助修復遺失單位的舊資料。")
     else:
         st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
@@ -210,7 +211,7 @@ if menu == "1. 自檢表":
 elif menu == "2. 個資清冊":
     st.markdown("### 📁 個資與機敏檔案清冊")
     if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
+        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。可於第一欄協助修復遺失單位的舊資料。")
     else:
         st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
@@ -226,7 +227,8 @@ elif menu == "2. 個資清冊":
 
     cfg = {
         "id": None, 
-        "unit_name": st.column_config.TextColumn("🟦所屬單位", disabled=True), # 顯示出來讓使用者知道自己綁定的單位
+        # 開放管理員編輯權限，讓管理員可以去修復舊資料的單位
+        "unit_name": st.column_config.TextColumn("🟦所屬單位", disabled=not is_admin), 
         "dept_name": st.column_config.SelectboxColumn("🟦部名稱", options=dept_list),
         "room_name": st.column_config.SelectboxColumn("🟦室名稱", options=unit_list),
         "pi_manager": "🟦個資檔案管理者", "process_desc": "🟦業務流程說明",
@@ -267,7 +269,7 @@ elif menu == "2. 個資清冊":
 elif menu == "3. 風險評鑑":
     st.markdown("### ⚠️ 個人資料風險評鑑")
     if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
+        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。可協助修復遺失單位的舊資料。")
     else:
         st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
@@ -301,7 +303,7 @@ elif menu == "3. 風險評鑑":
 elif menu == "4. 委外廠商":
     st.markdown("### 🤝 委外廠商個資清冊")
     if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
+        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。可協助修復遺失單位的舊資料。")
     else:
         st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
