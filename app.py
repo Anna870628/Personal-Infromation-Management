@@ -102,18 +102,28 @@ if not st.session_state.auth:
     st.stop()
 
 # ==========================================
-# 3. 組織資料讀取
+# 3. 組織資料讀取 (強制轉型，防止空表鎖死)
 # ==========================================
 def fetch_org():
     try:
         d = supabase.table("departments").select("*").execute().data
         u = supabase.table("units").select("*").execute().data
-        return pd.DataFrame(d or []), pd.DataFrame(u or [])
-    except: return pd.DataFrame(columns=["dept_name"]), pd.DataFrame(columns=["dept_name", "unit_name"])
+        
+        df_d = pd.DataFrame(d) if d else pd.DataFrame(columns=["id", "dept_name"])
+        df_u = pd.DataFrame(u) if u else pd.DataFrame(columns=["id", "dept_name", "unit_name"])
+        
+        # 強制轉型，確保 Streamlit 知道這是文字欄位，不會在新增時鎖死
+        df_d["dept_name"] = df_d["dept_name"].astype("string")
+        df_u["dept_name"] = df_u["dept_name"].astype("string")
+        df_u["unit_name"] = df_u["unit_name"].astype("string")
+        
+        return df_d, df_u
+    except: 
+        return pd.DataFrame(columns=["id", "dept_name"]), pd.DataFrame(columns=["id", "dept_name", "unit_name"])
 
 df_dept, df_unit = fetch_org()
-dept_list = df_dept["dept_name"].tolist() if not df_dept.empty else []
-unit_list = df_unit["unit_name"].tolist() if not df_unit.empty else []
+dept_list = df_dept["dept_name"].dropna().unique().tolist() if not df_dept.empty else []
+unit_list = df_unit["unit_name"].dropna().unique().tolist() if not df_unit.empty else []
 
 # ==========================================
 # 5. 側邊欄與權限隔離邏輯
@@ -131,22 +141,16 @@ def load_data(table):
     return pd.DataFrame(res or [])
 
 def save_data(table, edited_df, original_df):
-    """資料存檔：自動比對刪除、掛載單位與防呆"""
-    
-    # 1. 處理「原生刪除」邏輯 (使用者選取列並按了 Delete 鍵)
+    """資料存檔：自動比對原生刪除、掛載單位與防呆"""
+    # 處理刪除邏輯
     if not original_df.empty and "id" in original_df.columns:
         orig_ids = set(original_df["id"].dropna().astype(str).tolist())
-        # 安全取得 edit_ids
-        if "id" in edited_df.columns:
-            edit_ids = set(edited_df["id"].dropna().astype(str).tolist())
-        else:
-            edit_ids = set()
-            
+        edit_ids = set(edited_df["id"].dropna().astype(str).tolist()) if "id" in edited_df.columns else set()
         deleted = list(orig_ids - edit_ids)
         if deleted: 
             supabase.table(table).delete().in_("id", deleted).execute()
 
-    # 2. 自動補齊 unit_name
+    # 自動補齊 unit_name
     if not is_admin and table not in ["departments", "units"]:
         edited_df["unit_name"] = user_unit
 
@@ -155,7 +159,7 @@ def save_data(table, edited_df, original_df):
     valid = []
     for r in records:
         meaningful_keys = [k for k in r.keys() if k not in ['id', 'unit_name']]
-        # 確認整列除了系統欄位以外，有確實填寫資料
+        # 確保有實質資料才寫入
         if any(r[k] is not None and str(r[k]).strip() != "" for k in meaningful_keys):
             if pd.isna(r.get('id')): r.pop('id', None)
             valid.append(r)
@@ -323,11 +327,12 @@ elif menu == "4. 委外廠商":
 
 elif menu == "5. 組織管理":
     st.markdown("### 🏢 組織架構管理")
-    st.info("💡 刪除方式：勾選最左側框框 -> 按鍵盤 `Delete` 鍵 -> 點擊下方儲存。")
+    st.info("💡 刪除方式：勾選最左側框框 -> 按鍵盤 `Delete` 鍵 -> 點擊下方儲存。連點兩下儲存格即可開始輸入！")
     
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("1. 部門 CRUD")
+        # 【修復點】明確加上 TextColumn 設定，確保能編輯
         ed_d = st.data_editor(
             df_dept, num_rows="dynamic", use_container_width=True, 
             column_order=["dept_name"],
@@ -341,12 +346,14 @@ elif menu == "5. 組織管理":
             
     with c2:
         st.subheader("2. 單位 CRUD")
+        # 【修復點】明確加上 TextColumn 與 SelectboxColumn 設定
+        opts = dept_list if dept_list else ["(請先建立部門)"]
         ed_u = st.data_editor(
             df_unit, num_rows="dynamic", use_container_width=True, 
             column_order=["dept_name", "unit_name"],
             column_config={
                 "id": None, 
-                "dept_name": st.column_config.SelectboxColumn("所屬部門", options=dept_list, required=True), 
+                "dept_name": st.column_config.SelectboxColumn("所屬部門", options=opts, required=True), 
                 "unit_name": st.column_config.TextColumn("🏠 單位名稱", required=True)
             }
         )
