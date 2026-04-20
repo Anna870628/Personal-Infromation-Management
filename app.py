@@ -12,9 +12,7 @@ st.set_page_config(page_title="車美仕個資盤點系統", page_icon="🛡️"
 # 1. 定義共用的下拉選項與 Excel 匯出函式
 # ==========================================
 YN_OPTIONS = ["Y", "N"]
-
 PI_AMOUNT_OPTIONS = ["每年產生大於1000筆", "每年產生100~1000筆", "每年產生小於100筆"]
-
 PI_PURPOSE_OPTIONS = [
     "○○二 人事管理（包含甄選、離職及所屬員工基本資訊、現職、學經歷、考試分發、終身學習訓練進修、考績獎懲、銓審、薪資待遇、差勤、福利措施、褫奪公權、特殊查核或其他人事措施）",
     "○三一 全民健康保險、勞工保險、農民保險、國民年金保險或其他社會保險",
@@ -26,7 +24,6 @@ PI_PURPOSE_OPTIONS = [
     "○九○ 消費者、客戶管理與服務",
     "一五七 調查、統計與研究分析"
 ]
-
 PI_CATEGORY_OPTIONS = [
     "Ｃ○○一 辨識個人者", "Ｃ○○二 辨識財務者", "Ｃ○○三 政府資料中之辨識者",
     "Ｃ○一一 個人描述", "Ｃ○二一 家庭情形", "Ｃ○三一 住家及設施",
@@ -35,19 +32,15 @@ PI_CATEGORY_OPTIONS = [
     "Ｃ○六八 薪資與預扣款", "Ｃ一一一 健康紀錄", "Ｃ一三一 書面文件之檢索",
     "Ｃ一三二 未分類之資料"
 ]
-
 LEGAL_BASIS_OPTIONS = [
-    "A.法律明文規定",
-    "B.履行法定義務所必要，且有適當安全維護措施",
+    "A.法律明文規定", "B.履行法定義務所必要，且有適當安全維護措施",
     "C.當事人自行公開或其他已合法公開之個人資料",
     "D.協助公務機關執行法定職務或非公務機關履行法定義務所必要，且有適當安全維護措施",
     "E.經當事人書面同意"
 ]
-
 COLLECT_METHOD_OPTIONS = ["直接蒐集", "間接蒐集"]
 
 def generate_excel(df, rename_dict, color_rules, sheet_name="Sheet1"):
-    """將 DataFrame 轉為帶有顏色標頭的 Excel 檔案"""
     export_df = df.copy()
     ordered_cols = [col for col in rename_dict.keys() if col in export_df.columns]
     export_df = export_df[ordered_cols]
@@ -75,9 +68,7 @@ def generate_excel(df, rename_dict, color_rules, sheet_name="Sheet1"):
                 if value in columns:
                     fmt_key = color
                     break
-            if fmt_key not in formats:
-                fmt_key = "default"
-                
+            if fmt_key not in formats: fmt_key = "default"
             worksheet.write(0, col_num, value, formats[fmt_key])
             worksheet.set_column(col_num, col_num, 20) 
             
@@ -100,6 +91,27 @@ def init_connection() -> Client:
 
 supabase = init_connection()
 
+# ==========================================
+# 3. 動態讀取組織架構 (部門與單位)
+# ==========================================
+def load_org_data():
+    try:
+        depts = supabase.table("departments").select("*").execute().data
+        units = supabase.table("units").select("*").execute().data
+        df_dept = pd.DataFrame(depts) if depts else pd.DataFrame(columns=["id", "dept_name"])
+        df_unit = pd.DataFrame(units) if units else pd.DataFrame(columns=["id", "dept_name", "unit_name"])
+        return df_dept, df_unit
+    except Exception as e:
+        st.error(f"讀取組織資料失敗: {e}")
+        return pd.DataFrame(columns=["id", "dept_name"]), pd.DataFrame(columns=["id", "dept_name", "unit_name"])
+
+df_dept, df_unit = load_org_data()
+dept_list = df_dept["dept_name"].dropna().tolist() if not df_dept.empty else ["預設部門"]
+unit_list = df_unit["unit_name"].dropna().tolist() if not df_unit.empty else ["預設單位"]
+
+# ==========================================
+# 4. 登入驗證機制
+# ==========================================
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -120,9 +132,14 @@ if not st.session_state.authenticated:
 # 5. 側邊欄與 CRUD 邏輯
 # ==========================================
 st.sidebar.title("👤 使用者管理")
-user_unit = st.sidebar.selectbox("登入單位", ["業務企劃室", "科技創新發展室", "總管理員"])
+# 登入單位改為從資料庫動態抓取
+user_unit = st.sidebar.selectbox("登入單位", unit_list + ["總管理員"])
 is_admin = (user_unit == "總管理員")
-menu = st.sidebar.radio("📂 功能導覽", ["1. 自檢表", "2. 個資清冊", "3. 風險評鑑表", "4. 委外廠商清冊"])
+
+menu_options = ["1. 自檢表", "2. 個資清冊", "3. 風險評鑑表", "4. 委外廠商清冊"]
+if is_admin:
+    menu_options.append("5. 組織架構管理 (管理員)")
+menu = st.sidebar.radio("📂 功能導覽", menu_options)
 
 def load_data(table_name):
     query = supabase.table(table_name).select("*")
@@ -130,17 +147,36 @@ def load_data(table_name):
     response = query.execute()
     return pd.DataFrame(response.data)
 
-def save_data(table_name, df):
-    if not is_admin and "unit_name" in df.columns:
-        df["unit_name"] = df["unit_name"].replace(["", None], user_unit)
-    df = df.where(pd.notnull(df), None)
-    records = df.to_dict(orient="records")
-    if records:
+def save_data(table_name, edited_df, original_df):
+    """支援新增、修改、同步刪除，並自動補齊非管理員的所屬單位"""
+    # 1. 偵測並執行刪除
+    deleted_ids = []
+    if "id" in original_df.columns and "id" in edited_df.columns:
+        original_ids = set(original_df["id"].dropna().astype(str).tolist())
+        edited_ids = set(edited_df["id"].dropna().astype(str).tolist())
+        deleted_ids = list(original_ids - edited_ids)
+        if deleted_ids:
+            try:
+                supabase.table(table_name).delete().in_("id", deleted_ids).execute()
+            except Exception as e:
+                st.error(f"資料庫刪除失敗：{e}")
+
+    # 2. 自動補上單位名稱 (排除組織管理表單)
+    if not is_admin and table_name not in ["departments", "units"]:
+        edited_df["unit_name"] = user_unit 
+        
+    upsert_df = edited_df.where(pd.notnull(edited_df), None)
+    records = upsert_df.to_dict(orient="records")
+    valid_records = [r for r in records if any(v is not None and str(v).strip() != "" for k, v in r.items() if k != 'id')]
+    
+    if valid_records:
         try:
-            supabase.table(table_name).upsert(records).execute()
-            st.success("✅ 資料存檔成功！")
+            supabase.table(table_name).upsert(valid_records).execute()
+            st.success("✅ 資料同步成功！")
         except Exception as e:
-            st.error(f"存檔失敗，請確認資料庫是否已新增對應欄位：{e}")
+            st.error(f"❌ 存檔失敗：{e}")
+    else:
+        if deleted_ids: st.success("✅ 所選資料已成功刪除！")
 
 # ==========================================
 # 7. 分頁實作
@@ -148,7 +184,7 @@ def save_data(table_name, df):
 
 if menu == "1. 自檢表":
     st.markdown("### 🛡️ 個資管理工作自檢表")
-    st.markdown("🟦 `基本資訊` | 🟧 `委外管理` | 🟩 `結案專用`")
+    st.markdown("🟦 `基本資訊` | 🟧 `委外管理` | 🟩 `結案專用` (💡 提示：點擊表格左側行號，按 `Delete` 鍵可刪除該列)")
     
     df = load_data("self_checklist")
     chk_order = [
@@ -160,52 +196,41 @@ if menu == "1. 自檢表":
         if col not in df.columns: df[col] = None
 
     edited_df = st.data_editor(
-        df,
-        num_rows="dynamic",
-        use_container_width=True,
-        column_order=chk_order, 
+        df, num_rows="dynamic", use_container_width=True, column_order=chk_order, 
         column_config={
             "id": None,
-            "item_no": st.column_config.TextColumn("🟦項次", help="請輸入序號"),
-            "unit_name": st.column_config.TextColumn("🟦單位名稱"),
-            "project_name": st.column_config.TextColumn("🟦業務名稱", help="請填寫專案名稱"),
+            "item_no": st.column_config.TextColumn("🟦項次"),
+            "unit_name": st.column_config.TextColumn("🟦單位名稱", disabled=True),
+            "project_name": st.column_config.TextColumn("🟦業務名稱"),
             "owner": st.column_config.TextColumn("🟦業務負責人"),
             "status": st.column_config.SelectboxColumn("🟦業務狀態", options=YN_OPTIONS), 
             "pi_inventory_done": st.column_config.SelectboxColumn("🟦個資清冊建檔", options=YN_OPTIONS),
             "vendor_mgmt_done": st.column_config.SelectboxColumn("🟦委外廠商個資管理", options=YN_OPTIONS),
-            
-            "vendor_name": st.column_config.TextColumn("🟧委外廠商名稱", help="【委外管理】請填寫委外廠商名稱"),
-            "form_d001": st.column_config.SelectboxColumn("🟧D001清冊", options=YN_OPTIONS, help="【委外管理】D001 委外檔案清冊是否完成"),
-            "form_d002": st.column_config.SelectboxColumn("🟧D002存取單", options=YN_OPTIONS, help="【委外管理】D002 存取單是否完成"),
-            "form_d003": st.column_config.SelectboxColumn("🟧D003銷毀單", options=YN_OPTIONS, help="【委外管理】D003 銷毀單是否完成"),
-            
-            "pi_destroyed": st.column_config.SelectboxColumn("🟩個資已銷毀", options=YN_OPTIONS, help="【結案專用】專案已結束需填寫")
+            "vendor_name": st.column_config.TextColumn("🟧委外廠商名稱"),
+            "form_d001": st.column_config.SelectboxColumn("🟧D001清冊", options=YN_OPTIONS),
+            "form_d002": st.column_config.SelectboxColumn("🟧D002存取單", options=YN_OPTIONS),
+            "form_d003": st.column_config.SelectboxColumn("🟧D003銷毀單", options=YN_OPTIONS),
+            "pi_destroyed": st.column_config.SelectboxColumn("🟩個資已銷毀", options=YN_OPTIONS)
         }
     )
 
     col1, col2 = st.columns([1, 6])
     with col1:
-        if st.button("💾 儲存自檢表"):
-            save_data("self_checklist", edited_df)
+        if st.button("💾 儲存自檢表"): save_data("self_checklist", edited_df, df)
     with col2:
         rename_dict = {
             "item_no": "項次", "unit_name": "單位名稱", "project_name": "業務名稱",
             "owner": "業務負責人", "status": "業務狀態", "pi_inventory_done": "個資清冊建檔",
             "vendor_mgmt_done": "委外廠商個資管理", "vendor_name": "委外廠商名稱",
-            "form_d001": "D001清冊", "form_d002": "D002存取單",
-            "form_d003": "D003銷毀單", "pi_destroyed": "個資已銷毀"
+            "form_d001": "D001清冊", "form_d002": "D002存取單", "form_d003": "D003銷毀單", "pi_destroyed": "個資已銷毀"
         }
-        color_rules = {
-            "blue": ["項次", "單位名稱", "業務名稱", "業務負責人", "業務狀態", "個資清冊建檔", "委外廠商個資管理"],
-            "orange": ["委外廠商名稱", "D001清冊", "D002存取單", "D003銷毀單"],
-            "green": ["個資已銷毀"]
-        }
+        color_rules = {"blue": ["項次", "單位名稱", "業務名稱", "業務負責人", "業務狀態", "個資清冊建檔", "委外廠商個資管理"], "orange": ["委外廠商名稱", "D001清冊", "D002存取單", "D003銷毀單"], "green": ["個資已銷毀"]}
         excel_data = generate_excel(edited_df, rename_dict, color_rules)
         st.download_button("📥 匯出 Excel 表", excel_data, f"自檢表_{user_unit}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 elif menu == "2. 個資清冊":
     st.markdown("### 📁 個資與機敏檔案清冊")
-    st.markdown("🟦`基本資訊` 🟩`個資範圍` 🟧`系統/使用/傳送` 🟪`儲存/刪除` 🟥`國際傳輸`")
+    st.markdown("🟦`基本資訊` 🟩`個資範圍` 🟧`系統/使用/傳送` 🟪`儲存/刪除` 🟥`國際傳輸` (💡 第一欄所屬單位已隱藏)")
     
     df = load_data("pi_inventory")
     
@@ -213,19 +238,18 @@ elif menu == "2. 個資清冊":
                      "教育職業", "病歷", "醫療", "基因", "性生活", "健康檢查", "犯罪前科", 
                      "聯絡方式", "財務情況", "社會活動", "車籍資料", "其他"]
     
+    # 這裡將 "unit_name" 移出 pi_order，即可在網頁畫面上隱藏該欄位
     pi_order = [
-        "unit_name", "dept_name", "room_name", "pi_manager", "process_desc", 
+        "dept_name", "room_name", "pi_manager", "process_desc", 
         "pi_amount", "legal_rule", "pi_purpose", "pi_category"               
     ]
     pi_order.extend([f"scope_{col}" for col in pi_scope_cols])               
     pi_order.extend(["legal_basis", "collect_method"])                       
     pi_order.extend([                                                        
-        "sys_name", "sys_source",
-        "use_target", "use_purpose", "use_method", "use_protect",
+        "sys_name", "sys_source", "use_target", "use_purpose", "use_method", "use_protect",
         "trans_target", "trans_purpose", "trans_method", "trans_protect",
         "store_loc", "store_legal_time", "store_inner_time", "store_protect",
-        "del_method", "del_unit",
-        "intl_country", "intl_target", "intl_purpose", "intl_method", "intl_protect"
+        "del_method", "del_unit", "intl_country", "intl_target", "intl_purpose", "intl_method", "intl_protect"
     ])
     
     for col in pi_order:
@@ -233,9 +257,11 @@ elif menu == "2. 個資清冊":
 
     col_cfg = {
         "id": None,
-        "unit_name": st.column_config.TextColumn("🟦所屬單位"),
-        "dept_name": st.column_config.TextColumn("🟦部名稱"),
-        "room_name": st.column_config.TextColumn("🟦室名稱"),
+        "unit_name": None, # 徹底在底層隱藏
+        # 動態資料庫下拉選單
+        "dept_name": st.column_config.SelectboxColumn("🟦部名稱", options=dept_list),
+        "room_name": st.column_config.SelectboxColumn("🟦室名稱", options=unit_list),
+        
         "pi_manager": st.column_config.TextColumn("🟦個資檔案管理者"),
         "process_desc": st.column_config.TextColumn("🟦業務流程說明"),
         
@@ -243,40 +269,25 @@ elif menu == "2. 個資清冊":
         "legal_rule": st.column_config.TextColumn("🟩法源/內部規範依據"),
         "pi_purpose": st.column_config.SelectboxColumn("🟩特定目的", options=PI_PURPOSE_OPTIONS),
         "pi_category": st.column_config.SelectboxColumn("🟩個資之類別", options=PI_CATEGORY_OPTIONS),
-        
         "legal_basis": st.column_config.SelectboxColumn("🟩合法蒐集依據", options=LEGAL_BASIS_OPTIONS),
         "collect_method": st.column_config.SelectboxColumn("🟩蒐集方式", options=COLLECT_METHOD_OPTIONS),
         
-        "sys_name": st.column_config.TextColumn("🟧應用系統名稱"),
-        "sys_source": st.column_config.TextColumn("🟧來源"),
+        "sys_name": st.column_config.TextColumn("🟧應用系統名稱"), "sys_source": st.column_config.TextColumn("🟧來源"),
+        "use_target": st.column_config.TextColumn("🟧使用對象"), "use_purpose": st.column_config.TextColumn("🟧使用目的"),
+        "use_method": st.column_config.TextColumn("🟧使用方式"), "use_protect": st.column_config.TextColumn("🟧保護方式"),
+        "trans_target": st.column_config.TextColumn("🟧傳送對象"), "trans_purpose": st.column_config.TextColumn("🟧傳送目的"),
+        "trans_method": st.column_config.TextColumn("🟧傳送方式"), "trans_protect": st.column_config.TextColumn("🟧保護方式"),
         
-        "use_target": st.column_config.TextColumn("🟧使用對象"),
-        "use_purpose": st.column_config.TextColumn("🟧使用目的"),
-        "use_method": st.column_config.TextColumn("🟧使用方式"),
-        "use_protect": st.column_config.TextColumn("🟧保護方式"),
+        "store_loc": st.column_config.TextColumn("🟪儲存位置"), "store_legal_time": st.column_config.TextColumn("🟪法定保留時限"),
+        "store_inner_time": st.column_config.TextColumn("🟪內部保存期限"), "store_protect": st.column_config.TextColumn("🟪保護措施"),
+        "del_method": st.column_config.TextColumn("🟪刪除/銷毀方式"), "del_unit": st.column_config.TextColumn("🟪刪除/銷毀單位"),
         
-        "trans_target": st.column_config.TextColumn("🟧傳送對象"),
-        "trans_purpose": st.column_config.TextColumn("🟧傳送目的"),
-        "trans_method": st.column_config.TextColumn("🟧傳送方式"),
-        "trans_protect": st.column_config.TextColumn("🟧保護方式"),
-        
-        "store_loc": st.column_config.TextColumn("🟪儲存位置"),
-        "store_legal_time": st.column_config.TextColumn("🟪法定保留時限"),
-        "store_inner_time": st.column_config.TextColumn("🟪內部保存期限"),
-        "store_protect": st.column_config.TextColumn("🟪保護措施"),
-        
-        "del_method": st.column_config.TextColumn("🟪刪除/銷毀方式"),
-        "del_unit": st.column_config.TextColumn("🟪刪除/銷毀單位"),
-        
-        "intl_country": st.column_config.TextColumn("🟥傳送國家"),
-        "intl_target": st.column_config.TextColumn("🟥傳送對象"),
-        "intl_purpose": st.column_config.TextColumn("🟥傳送目的"),
-        "intl_method": st.column_config.TextColumn("🟥傳送方式"),
+        "intl_country": st.column_config.TextColumn("🟥傳送國家"), "intl_target": st.column_config.TextColumn("🟥傳送對象"),
+        "intl_purpose": st.column_config.TextColumn("🟥傳送目的"), "intl_method": st.column_config.TextColumn("🟥傳送方式"),
         "intl_protect": st.column_config.TextColumn("🟥保護方式")
     }
     
-    for col in pi_scope_cols:
-        col_cfg[f"scope_{col}"] = st.column_config.SelectboxColumn(f"🟩{col}", options=YN_OPTIONS, help="【個資範圍】是否包含此資料")
+    for col in pi_scope_cols: col_cfg[f"scope_{col}"] = st.column_config.SelectboxColumn(f"🟩{col}", options=YN_OPTIONS)
 
     edited_df = st.data_editor(
         df, num_rows="dynamic", use_container_width=True, 
@@ -285,10 +296,10 @@ elif menu == "2. 個資清冊":
     
     col1, col2 = st.columns([1, 6])
     with col1:
-        if st.button("💾 儲存個資清冊"): save_data("pi_inventory", edited_df)
+        if st.button("💾 儲存個資清冊"): save_data("pi_inventory", edited_df, df)
     with col2:
         rename_dict = {
-            "unit_name": "所屬單位", "dept_name": "I.部名稱", "room_name": "I.室名稱", 
+            "dept_name": "I.部名稱", "room_name": "I.室名稱", 
             "pi_manager": "I.個資檔案管理者", "process_desc": "I.業務流程說明",
             "pi_amount": "II.筆數/份數", "legal_rule": "II.法源/內部規範依據",
             "pi_purpose": "II.特定目的", "pi_category": "II.個資之類別"
@@ -298,19 +309,15 @@ elif menu == "2. 個資清冊":
         rename_dict.update({
             "legal_basis": "II.合法蒐集依據", "collect_method": "II.蒐集方式",
             "sys_name": "III.應用系統名稱", "sys_source": "III.來源",
-            "use_target": "[使用]對象", "use_purpose": "[使用]目的", 
-            "use_method": "[使用]方式", "use_protect": "[使用]保護方式",
-            "trans_target": "[傳送]對象", "trans_purpose": "[傳送]目的", 
-            "trans_method": "[傳送]方式", "trans_protect": "[傳送]保護方式",
-            "store_loc": "[儲存]位置", "store_legal_time": "[儲存]法定保留時限",
-            "store_inner_time": "[儲存]內部保存期限", "store_protect": "[儲存]保護措施",
+            "use_target": "[使用]對象", "use_purpose": "[使用]目的", "use_method": "[使用]方式", "use_protect": "[使用]保護方式",
+            "trans_target": "[傳送]對象", "trans_purpose": "[傳送]目的", "trans_method": "[傳送]方式", "trans_protect": "[傳送]保護方式",
+            "store_loc": "[儲存]位置", "store_legal_time": "[儲存]法定保留時限", "store_inner_time": "[儲存]內部保存期限", "store_protect": "[儲存]保護措施",
             "del_method": "[刪除]銷毀方式", "del_unit": "[刪除]銷毀單位",
-            "intl_country": "[國際]國家", "intl_target": "[國際]對象",
-            "intl_purpose": "[國際]目的", "intl_method": "[國際]方式", "intl_protect": "[國際]保護方式"
+            "intl_country": "[國際]國家", "intl_target": "[國際]對象", "intl_purpose": "[國際]目的", "intl_method": "[國際]方式", "intl_protect": "[國際]保護方式"
         })
         
         color_rules = {
-            "blue": ["所屬單位", "I.部名稱", "I.室名稱", "I.個資檔案管理者", "I.業務流程說明"],
+            "blue": ["I.部名稱", "I.室名稱", "I.個資檔案管理者", "I.業務流程說明"],
             "green": ["II.筆數/份數", "II.法源/內部規範依據", "II.特定目的", "II.個資之類別", "II.合法蒐集依據", "II.蒐集方式"] + [f"[範圍]{col}" for col in pi_scope_cols],
             "orange": ["III.應用系統名稱", "III.來源", "[使用]對象", "[使用]目的", "[使用]方式", "[使用]保護方式", "[傳送]對象", "[傳送]目的", "[傳送]方式", "[傳送]保護方式"],
             "purple": ["[儲存]位置", "[儲存]法定保留時限", "[儲存]內部保存期限", "[儲存]保護措施", "[刪除]銷毀方式", "[刪除]銷毀單位"],
@@ -321,7 +328,6 @@ elif menu == "2. 個資清冊":
 
 elif menu == "3. 風險評鑑表":
     st.markdown("### ⚠️ 個人資料風險評鑑")
-    st.markdown("🟦 `基本資訊` | 🟨 `評分項目`")
     
     df = load_data("risk_assessment")
     expected_columns = ["id", "unit_name", "project_name", "score_1", "score_2", "score_3", "score_4", "score_5"]
@@ -333,35 +339,22 @@ elif menu == "3. 風險評鑑表":
         column_order=["unit_name", "project_name", "score_1", "score_2", "score_3", "score_4", "score_5"],
         column_config={
             "id": None,
-            "unit_name": st.column_config.TextColumn("🟦單位", disabled=not is_admin),
+            "unit_name": st.column_config.TextColumn("🟦單位", disabled=True),
             "project_name": st.column_config.TextColumn("🟦業務名稱"),
-            "score_1": st.column_config.NumberColumn("🟨(1)數量", min_value=1, max_value=5, help="1~5分：評估個資數量多寡"),
-            "score_2": st.column_config.NumberColumn("🟨(2)敏感度", min_value=1, max_value=5, help="1~5分：個資敏感程度"),
-            "score_3": st.column_config.NumberColumn("🟨(3)信譽損害", min_value=1, max_value=5, help="1~5分：若外洩對公司信譽影響"),
-            "score_4": st.column_config.NumberColumn("🟨(4)隱私衝擊", min_value=1, max_value=5, help="1~5分：當事人隱私受損程度"),
-            "score_5": st.column_config.NumberColumn("🟨(5)合作單位", min_value=1, max_value=5, help="1~5分：業務合作單位外洩風險"),
+            "score_1": st.column_config.NumberColumn("🟨(1)數量", min_value=1, max_value=5),
+            "score_2": st.column_config.NumberColumn("🟨(2)敏感度", min_value=1, max_value=5),
+            "score_3": st.column_config.NumberColumn("🟨(3)信譽損害", min_value=1, max_value=5),
+            "score_4": st.column_config.NumberColumn("🟨(4)隱私衝擊", min_value=1, max_value=5),
+            "score_5": st.column_config.NumberColumn("🟨(5)合作單位", min_value=1, max_value=5),
         }
     )
     
     col1, col2 = st.columns([1, 6])
     with col1:
-        if st.button("💾 儲存評估"): save_data("risk_assessment", edited_df)
-    with col2:
-        rename_dict = {
-            "unit_name": "單位", "project_name": "業務名稱",
-            "score_1": "(1)數量", "score_2": "(2)敏感度", "score_3": "(3)信譽損害",
-            "score_4": "(4)隱私衝擊", "score_5": "(5)合作單位"
-        }
-        color_rules = {
-            "blue": ["單位", "業務名稱"],
-            "yellow": ["(1)數量", "(2)敏感度", "(3)信譽損害", "(4)隱私衝擊", "(5)合作單位"]
-        }
-        excel_data = generate_excel(edited_df, rename_dict, color_rules)
-        st.download_button("📥 匯出 Excel 表", excel_data, f"風險評鑑_{user_unit}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        if st.button("💾 儲存評估"): save_data("risk_assessment", edited_df, df)
 
 elif menu == "4. 委外廠商清冊":
     st.markdown("### 🤝 委外廠商個資檔案清冊")
-    st.markdown("🟦 `基本資訊` | 🟩 `個資範圍` | 🟧 `傳送資訊`")
     
     df = load_data("vendor_inventory")
     for col in ["id", "unit_name", "vendor_name", "file_name", "pi_scope", "trans_purpose", "trans_method"]:
@@ -372,30 +365,50 @@ elif menu == "4. 委外廠商清冊":
         column_order=["unit_name", "vendor_name", "file_name", "pi_scope", "trans_purpose", "trans_method"],
         column_config={
             "id": None,
-            "unit_name": st.column_config.TextColumn("🟦單位", disabled=not is_admin),
+            "unit_name": st.column_config.TextColumn("🟦單位", disabled=True),
             "vendor_name": st.column_config.TextColumn("🟦廠商名稱"),
             "file_name": st.column_config.TextColumn("🟦個資檔案名稱"),
-            "pi_scope": st.column_config.TextColumn("🟩個資範圍", help="【檔案資訊】請說明提供給廠商的個資範圍"),
-            "trans_purpose": st.column_config.TextColumn("🟧傳送目的", help="【傳送資訊】為何需要傳送給該廠商"),
-            "trans_method": st.column_config.TextColumn("🟧傳送方式", help="【傳送資訊】API、郵寄、加密檔案等")
+            "pi_scope": st.column_config.TextColumn("🟩個資範圍"),
+            "trans_purpose": st.column_config.TextColumn("🟧傳送目的"),
+            "trans_method": st.column_config.TextColumn("🟧傳送方式")
         }
     )
     
     col1, col2 = st.columns([1, 6])
     with col1:
-        if st.button("💾 儲存清冊"): save_data("vendor_inventory", edited_df)
-    with col2:
-        rename_dict = {
-            "unit_name": "單位", "vendor_name": "廠商名稱", "file_name": "個資檔案名稱",
-            "pi_scope": "個資範圍", "trans_purpose": "傳送目的", "trans_method": "傳送方式"
-        }
-        color_rules = {
-            "blue": ["單位", "廠商名稱", "個資檔案名稱"],
-            "green": ["個資範圍"], 
-            "orange": ["傳送目的", "傳送方式"]
-        }
-        excel_data = generate_excel(edited_df, rename_dict, color_rules)
-        st.download_button("📥 匯出 Excel 表", excel_data, f"委外清冊_{user_unit}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        if st.button("💾 儲存清冊"): save_data("vendor_inventory", edited_df, df)
+
+# ==========================================
+# 8. 組織架構管理 (僅總管理員可見)
+# ==========================================
+elif menu == "5. 組織架構管理 (管理員)":
+    st.markdown("### 🏢 組織架構管理")
+    st.info("💡 這裡新增的部門與單位，會自動同步到系統所有的「下拉選單」與「登入選單」中。")
+    
+    col_dept, col_unit = st.columns(2)
+    
+    with col_dept:
+        st.subheader("1. 部門管理")
+        edited_dept = st.data_editor(
+            df_dept, num_rows="dynamic", use_container_width=True,
+            column_config={
+                "id": None,
+                "dept_name": st.column_config.TextColumn("🏢 部門名稱", required=True)
+            }
+        )
+        if st.button("💾 儲存部門異動"): save_data("departments", edited_dept, df_dept)
+
+    with col_unit:
+        st.subheader("2. 單位(室)管理")
+        edited_unit = st.data_editor(
+            df_unit, num_rows="dynamic", use_container_width=True,
+            column_config={
+                "id": None,
+                "dept_name": st.column_config.SelectboxColumn("所屬部門", options=dept_list, required=True),
+                "unit_name": st.column_config.TextColumn("🏠 單位名稱", required=True)
+            }
+        )
+        if st.button("💾 儲存單位異動"): save_data("units", edited_unit, df_unit)
 
 st.sidebar.divider()
 st.sidebar.caption("© 2026 Carmax Co., Ltd.")
