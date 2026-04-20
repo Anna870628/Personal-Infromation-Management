@@ -138,6 +138,7 @@ def save_data(table, edited_df, original_df):
         deleted = list(set(original_df["id"].dropna().astype(str)) - set(edited_df["id"].dropna().astype(str)))
         if deleted: supabase.table(table).delete().in_("id", deleted).execute()
 
+    # 自動補齊 unit_name
     if not is_admin:
         edited_df["unit_name"] = user_unit
 
@@ -146,9 +147,7 @@ def save_data(table, edited_df, original_df):
     valid = []
     for r in records:
         meaningful_keys = [k for k in r.keys() if k not in ['id', 'unit_name']]
-        # 確保該列真的有填寫資料
         if any(r[k] is not None and str(r[k]).strip() != "" for k in meaningful_keys):
-            # 若為新增資料，id 是 None/NaN，需將其從字典中移除，交給資料庫自動生成
             if pd.isna(r.get('id')):
                 r.pop('id', None)
             valid.append(r)
@@ -172,7 +171,7 @@ def save_data(table, edited_df, original_df):
 if menu == "1. 自檢表":
     st.markdown("### 🛡️ 自檢表管理")
     if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。可協助修復遺失單位的舊資料。")
+        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
     else:
         st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
@@ -211,14 +210,16 @@ if menu == "1. 自檢表":
 elif menu == "2. 個資清冊":
     st.markdown("### 📁 個資與機敏檔案清冊")
     if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。可於第一欄協助修復遺失單位的舊資料。")
+        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
     else:
         st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
     df = load_data("pi_inventory")
     
     scopes = ["姓名", "出生年月日", "身分證號碼", "護照號碼", "特徵", "指紋", "婚姻", "家庭", "教育職業", "病歷", "醫療", "基因", "性生活", "健康檢查", "犯罪前科", "聯絡方式", "財務情況", "社會活動", "車籍資料", "其他"]
-    order = ["unit_name", "dept_name", "room_name", "pi_manager", "process_desc", "pi_amount", "legal_rule", "pi_purpose", "pi_category"]
+    
+    # 移除 unit_name，讓畫面不再顯示所屬單位
+    order = ["dept_name", "room_name", "pi_manager", "process_desc", "pi_amount", "legal_rule", "pi_purpose", "pi_category"]
     order += [f"scope_{s}" for s in scopes]
     order += ["legal_basis", "collect_method", "sys_name", "sys_source", "use_target", "use_purpose", "use_method", "use_protect", "trans_target", "trans_purpose", "trans_method", "trans_protect", "store_loc", "store_legal_time", "store_inner_time", "store_protect", "del_method", "del_unit", "intl_country", "intl_target", "intl_purpose", "intl_method", "intl_protect"]
     
@@ -227,9 +228,8 @@ elif menu == "2. 個資清冊":
 
     cfg = {
         "id": None, 
-        # 開放管理員編輯權限，讓管理員可以去修復舊資料的單位
-        "unit_name": st.column_config.TextColumn("🟦所屬單位", disabled=not is_admin), 
-        "dept_name": st.column_config.SelectboxColumn("🟦部名稱", options=dept_list),
+        "unit_name": None, # 徹底隱藏所屬單位
+        "dept_name": st.column_config.SelectboxColumn("🟦部名稱", options=dept_list), # 部名稱設定為下拉選單
         "room_name": st.column_config.SelectboxColumn("🟦室名稱", options=unit_list),
         "pi_manager": "🟦個資檔案管理者", "process_desc": "🟦業務流程說明",
         "pi_amount": st.column_config.SelectboxColumn("🟩筆數/份數", options=PI_AMOUNT_OPTIONS),
@@ -254,10 +254,10 @@ elif menu == "2. 個資清冊":
         if st.button("💾 儲存清冊"):
             if save_data("pi_inventory", edited, df): time.sleep(0.5); st.rerun()
     with c2:
-        rename_dict = {"unit_name": "所屬單位", "dept_name":"I.部名稱","room_name":"I.室名稱","pi_manager":"I.個資檔案管理者","process_desc":"I.業務流程說明","pi_amount":"II.筆數/份數","legal_rule": "II.法源/內部規範依據", "pi_purpose":"II.特定目的","pi_category":"II.個資之類別","legal_basis":"II.合法蒐集依據","collect_method":"II.蒐集方式","sys_name":"III.應用系統名稱","sys_source":"III.來源","use_target":"[使用]對象","use_purpose":"[使用]目的","use_method":"[使用]方式","use_protect":"[使用]保護方式","trans_target":"[傳送]對象","trans_purpose":"[傳送]目的","trans_method":"[傳送]方式","trans_protect":"[傳送]保護方式","store_loc":"[儲存]位置","store_legal_time":"[儲存]法定保留時限","store_inner_time":"[儲存]內部保存期限","store_protect":"[儲存]保護措施","del_method":"[刪除]銷毀方式","del_unit":"[刪除]銷毀單位","intl_country":"[國際]國家","intl_target":"[國際]對象","intl_purpose":"[國際]目的","intl_method":"[國際]方式","intl_protect":"[國際]保護方式"}
+        rename_dict = {"dept_name":"I.部名稱","room_name":"I.室名稱","pi_manager":"I.個資檔案管理者","process_desc":"I.業務流程說明","pi_amount":"II.筆數/份數","legal_rule": "II.法源/內部規範依據", "pi_purpose":"II.特定目的","pi_category":"II.個資之類別","legal_basis":"II.合法蒐集依據","collect_method":"II.蒐集方式","sys_name":"III.應用系統名稱","sys_source":"III.來源","use_target":"[使用]對象","use_purpose":"[使用]目的","use_method":"[使用]方式","use_protect":"[使用]保護方式","trans_target":"[傳送]對象","trans_purpose":"[傳送]目的","trans_method":"[傳送]方式","trans_protect":"[傳送]保護方式","store_loc":"[儲存]位置","store_legal_time":"[儲存]法定保留時限","store_inner_time":"[儲存]內部保存期限","store_protect":"[儲存]保護措施","del_method":"[刪除]銷毀方式","del_unit":"[刪除]銷毀單位","intl_country":"[國際]國家","intl_target":"[國際]對象","intl_purpose":"[國際]目的","intl_method":"[國際]方式","intl_protect":"[國際]保護方式"}
         for s in scopes: rename_dict[f"scope_{s}"] = f"[範圍]{s}"
         rules = {
-            "blue": ["所屬單位","I.部名稱","I.室名稱","I.個資檔案管理者","I.業務流程說明"],
+            "blue": ["I.部名稱","I.室名稱","I.個資檔案管理者","I.業務流程說明"],
             "green": ["II.筆數/份數","II.法源/內部規範依據","II.特定目的","II.個資之類別","II.合法蒐集依據","II.蒐集方式"] + [f"[範圍]{s}" for s in scopes],
             "orange": ["III.應用系統名稱","III.來源","[使用]對象","[使用]目的","[使用]方式","[使用]保護方式","[傳送]對象","[傳送]目的","[傳送]方式","[傳送]保護方式"],
             "purple": ["[儲存]位置","[儲存]法定保留時限","[儲存]內部保存期限","[儲存]保護措施","[刪除]銷毀方式","[刪除]銷毀單位"],
@@ -269,7 +269,7 @@ elif menu == "2. 個資清冊":
 elif menu == "3. 風險評鑑":
     st.markdown("### ⚠️ 個人資料風險評鑑")
     if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。可協助修復遺失單位的舊資料。")
+        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
     else:
         st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
@@ -303,7 +303,7 @@ elif menu == "3. 風險評鑑":
 elif menu == "4. 委外廠商":
     st.markdown("### 🤝 委外廠商個資清冊")
     if is_admin:
-        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。可協助修復遺失單位的舊資料。")
+        st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。")
     else:
         st.info(f"🔒 目前身分：【{user_unit}】，系統已啟動權限隔離，僅顯示本單位資料。")
         
