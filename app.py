@@ -49,6 +49,8 @@ LEGAL_BASIS_OPTIONS = [
     "E.經當事人書面同意"
 ]
 COLLECT_METHOD_OPTIONS = ["直接蒐集", "間接蒐集"]
+
+# ⭐️ 修正：檔案類型的精確下拉選單
 FILE_TYPE_OPTIONS = ["實體紙本", "數位檔案", "影像檔案", "影音檔案"]
 
 SCORE_1_OPTS = ["5: 每年產生大於1000筆", "3: 每年產生100~1000筆", "1: 每年產生小於100筆"]
@@ -376,18 +378,22 @@ elif menu == "4. 委外廠商":
     else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
     
     # ------------------------------------------
-    # 🌟 委外廠商清冊：精確對齊 Excel 的說明與範圍
+    # 🌟 委外廠商清冊：100% 依據最新 Excel 欄位對齊
     # ------------------------------------------
-    st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
-    st.info("📌 **【個人資料範圍填寫說明】**：\n辨識檔案是否含有自然人之姓名、出生年月日、國民身分證統一編號、護照號碼、特徵…等個人資料 (如有請填列Y，如無請填列N)。")
+    vendor_scopes = [
+        "姓名", "出生年月日", "國民身分證編號", "電話", "地址", "護照號碼", "特徵", "指紋", 
+        "婚姻", "家庭", "教育", "職業", "病歷", "特種資料", "財務情況", "社會活動", 
+        "車籍資料", "醫療", "基因", "性生活", "健康檢查", "犯罪前科"
+    ]
     
-    vendor_scopes = ["姓名", "出生年月日", "國民身分證編號", "電話", "地址", "護照號碼", "特徵", "指紋", "婚姻", "家庭", "教育", "職業", "病歷", "醫療", "基因", "性生活", "健康檢查", "犯罪前科", "財務情況", "社會活動", "車籍資料"]
+    st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
+    st.info("📌 **【個人資料範圍填寫說明】**：\n辨識檔案是否含有自然人之姓名、出生年月日、國民身分證統一編號、護照號碼、特徵…等個人資料 (如有請下拉選擇Y，如無請選擇N)。")
     
     ex_vendor_dict = {
         "item_no": "請依流水號進行填列",
         "vendor_name": "請填寫委外廠商名稱",
         "file_name": "請填列含有和泰所屬個人資料之檔案名稱\n(個人資料應分筆分列填寫)",
-        "file_type": "請填列實體紙本、數位檔案、影像檔案、影音檔案\n(不同類型請填列不同筆)",
+        "file_type": "請下拉選擇",
         "pi_amount": "填列筆數(數位、影像、影音)/份數(紙本)",
         "pi_purpose": "識別該資料之使用目的",
         "data_source": "請填列個人資料的來源",
@@ -409,12 +415,10 @@ elif menu == "4. 委外廠商":
         "trans_target": "🟧傳送對象", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式",
         "store_loc": "🟪儲存地點及位置", "remark": "⬜備註"
     }
+    
     for s in vendor_scopes:
-        # 將車籍資料名稱對齊 Excel 規格
-        if s == "車籍資料":
-            rename_vendor_map[f"scope_{s}"] = "🟩車籍資料\n(車號、引擎號碼、車身號碼、底盤號碼等)"
-        else:
-            rename_vendor_map[f"scope_{s}"] = f"🟩{s}"
+        if s == "車籍資料": rename_vendor_map[f"scope_{s}"] = "🟩車籍資料\n(車號、引擎號碼、車身號碼、底盤號碼等)"
+        else: rename_vendor_map[f"scope_{s}"] = f"🟩{s}"
     
     vendor_order = ["item_no", "vendor_name", "file_name", "file_type", "pi_amount", "pi_purpose"] + [f"scope_{s}" for s in vendor_scopes] + ["data_source", "source_channel", "store_loc", "sys_name", "trans_target", "trans_purpose", "trans_method", "remark"]
     
@@ -435,6 +439,7 @@ elif menu == "4. 委外廠商":
         "trans_target": "🟧傳送對象", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式",
         "store_loc": "🟪儲存地點及位置", "remark": "⬜備註"
     }
+    
     for s in vendor_scopes:
         if s == "車籍資料":
             cfg[f"scope_{s}"] = st.column_config.SelectboxColumn("🟩車籍資料\n(車號、引擎號碼、車身號碼、底盤號碼等)", options=YN_OPTIONS)
@@ -450,7 +455,7 @@ elif menu == "4. 委外廠商":
     with c2:
         rename_dict = {"item_no": "編號", "vendor_name": "委外廠商名稱", "file_name": "個人資料檔案名稱", "file_type": "檔案類型", "pi_amount": "筆數/份數", "pi_purpose": "個人資料檔案使用目的", "data_source": "資料來源", "source_channel": "資料來源管道", "sys_name": "資料鍵入之資訊系統", "trans_target": "傳送對象", "trans_purpose": "傳送目的", "trans_method": "傳送方式", "store_loc": "儲存地點及位置", "remark": "備註"}
         for s in vendor_scopes:
-            if s == "車籍資料": rename_dict[f"scope_{s}"] = "車籍資料(車號、引擎號碼、車身號碼、底盤號碼等)"
+            if s == "車籍資料": rename_dict[f"scope_{s}"] = "車籍資料\n(車號、引擎號碼、車身號碼、底盤號碼等)"
             else: rename_dict[f"scope_{s}"] = s
             
         rules = {
