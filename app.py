@@ -225,6 +225,9 @@ st.sidebar.title("👤 登入設定")
 user_unit = st.sidebar.selectbox("切換單位", unit_list + ["總管理員"])
 is_admin = (user_unit == "總管理員")
 
+# ⭐️ 補回剛剛不小心刪除的 menu 選單！
+menu = st.sidebar.radio("📂 功能選單", ["1. 自檢表", "2. 個資清冊", "3. 風險評鑑", "4. 委外廠商", "5. 組織管理"] if is_admin else ["1. 自檢表", "2. 個資清冊", "3. 風險評鑑", "4. 委外廠商"])
+
 def load_data(table):
     query = supabase.table(table).select("*")
     if not is_admin: query = query.eq("unit_name", user_unit)
@@ -269,14 +272,15 @@ def save_data(table, edited_df, original_df):
 
 if menu == "1. 自檢表":
     st.markdown("### 🛡️ 自檢表管理")
+    st.info("💡 **操作提示**：連點兩下儲存格即可喚出下拉選單！若您非總管理員，【單位名稱】會被鎖定以防誤改，存檔時會自動帶入您的單位。")
     if is_admin: 
         st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：選取最左側行號 -> 按鍵盤 Delete 鍵。 **(系統已為您自動重新排序編號，點擊儲存即可生效全域流水號)**")
     else: 
-        st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 連點兩下儲存格即可喚出下拉選單！")
+        st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
         
     df = load_data("self_checklist")
     
-    # ⭐️ 管理員視角：自動重新編號
+    # 管理員視角：自動重新編號
     if is_admin and not df.empty and "item_no" in df.columns:
         df["item_no"] = [str(i) for i in range(1, len(df) + 1)]
     
@@ -286,7 +290,7 @@ if menu == "1. 自檢表":
 
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=cols, column_config={
         "id": None, "item_no": "🟦項次", 
-        "unit_name": st.column_config.SelectboxColumn("🟦單位", options=safe_unit_list, default=user_unit), # ⭐️ 解鎖並設定預設單位
+        "unit_name": st.column_config.SelectboxColumn("🟦單位", options=safe_unit_list, default=user_unit, disabled=not is_admin),
         "project_name": "🟦業務名稱", "owner": "🟦負責人", "status": st.column_config.SelectboxColumn("🟦狀態", options=YN_OPTIONS),
         "pi_inventory_done": st.column_config.SelectboxColumn("🟦清冊建檔", options=YN_OPTIONS),
         "vendor_mgmt_done": st.column_config.SelectboxColumn("🟦委外管理", options=YN_OPTIONS),
@@ -307,8 +311,9 @@ if menu == "1. 自檢表":
 
 elif menu == "2. 個資清冊":
     st.markdown("### 📁 個資與機敏檔案清冊")
+    st.info("💡 **操作提示**：連點兩下儲存格即可喚出下拉選單！")
     if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 Delete 鍵。")
-    else: st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 連點兩下儲存格即可喚出下拉選單！")
+    else: st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 Delete 鍵 -> 點擊儲存。")
         
     scopes = ["姓名", "出生年月日", "身分證號碼", "護照號碼", "特徵", "指紋", "婚姻", "家庭", "教育職業", "病歷", "醫療", "基因", "性生活", "健康檢查", "犯罪前科", "聯絡方式", "財務情況", "社會活動", "車籍資料", "其他"]
     order = ["dept_name", "room_name", "pi_manager", "process_desc", "pi_amount", "legal_rule", "pi_purpose", "pi_category"]
@@ -395,10 +400,11 @@ elif menu == "2. 個資清冊":
 
 elif menu == "3. 風險評鑑":
     st.markdown("### ⚠️ 個人資料風險評鑑")
+    st.info("💡 **操作提示**：連點兩下儲存格即可喚出下拉選單！若您非總管理員，【單位名稱】會被鎖定以防誤改，存檔時會自動帶入您的單位。")
     if is_admin: 
         st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：選取最左側行號 -> 按鍵盤 Delete 鍵。 **(系統已為您自動重新排序編號，點擊儲存即可生效全域流水號)**")
     else: 
-        st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 連點兩下儲存格即可喚出下拉選單！")
+        st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 Delete 鍵 -> 點擊儲存。")
     
     st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
     
@@ -421,7 +427,7 @@ elif menu == "3. 風險評鑑":
 
     df = load_data("risk_assessment")
     
-    # ⭐️ 管理員視角：自動重新編號
+    # 管理員視角：自動重新編號
     if is_admin and not df.empty and "item_no" in df.columns:
         df["item_no"] = [str(i) for i in range(1, len(df) + 1)]
         
@@ -431,7 +437,7 @@ elif menu == "3. 風險評鑑":
 
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=risk_cols, column_config={
         "id": None, "item_no": "🟦編號",
-        "unit_name": st.column_config.SelectboxColumn("🟦單位名稱", options=safe_unit_list, default=user_unit), # ⭐️ 解鎖並設定預設單位
+        "unit_name": st.column_config.SelectboxColumn("🟦單位名稱", options=safe_unit_list, default=user_unit, disabled=not is_admin),
         "project_name": "🟦作業流程名稱",
         "score_1": st.column_config.SelectboxColumn("🟨(1) 個資數量", options=SCORE_1_OPTS, width="large"), 
         "score_2": st.column_config.SelectboxColumn("🟨(2) 個資敏感度", options=SCORE_2_OPTS, width="large"), 
@@ -458,10 +464,11 @@ elif menu == "3. 風險評鑑":
 
 elif menu == "4. 委外廠商":
     st.markdown("### 🤝 委外廠商個資清冊")
+    st.info("💡 **操作提示**：連點兩下儲存格即可喚出下拉選單！若您非總管理員，【單位名稱】會被鎖定以防誤改，存檔時會自動帶入您的單位。")
     if is_admin: 
         st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：選取最左側行號 -> 按鍵盤 Delete 鍵。 **(系統已為您自動重新排序編號，點擊儲存即可生效全域流水號)**")
     else: 
-        st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 連點兩下儲存格即可喚出下拉選單！")
+        st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 Delete 鍵 -> 點擊儲存。")
     
     vendor_scopes = [
         "姓名", "出生年月日", "國民身分證編號", "電話", "地址", "護照號碼", "特徵", "指紋", 
@@ -509,7 +516,7 @@ elif menu == "4. 委外廠商":
 
     df = load_data("vendor_inventory")
     
-    # ⭐️ 管理員視角：自動重新編號
+    # 管理員視角：自動重新編號
     if is_admin and not df.empty and "item_no" in df.columns:
         df["item_no"] = [str(i) for i in range(1, len(df) + 1)]
         
@@ -518,7 +525,7 @@ elif menu == "4. 委外廠商":
 
     cfg = {
         "id": None, 
-        "unit_name": st.column_config.SelectboxColumn("🟦單位名稱", options=safe_unit_list, default=user_unit), # ⭐️ 解鎖並設定預設單位
+        "unit_name": st.column_config.SelectboxColumn("🟦單位名稱", options=safe_unit_list, default=user_unit, disabled=not is_admin),
         "item_no": "🟦編號", "vendor_name": "🟦委外廠商名稱", "file_name": "🟦個人資料檔案名稱",
         "file_type": st.column_config.SelectboxColumn("🟦檔案類型", options=FILE_TYPE_OPTIONS),
         "pi_amount": st.column_config.SelectboxColumn("🟩筆數/份數", options=PI_AMOUNT_OPTIONS),
