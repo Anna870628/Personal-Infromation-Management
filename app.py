@@ -92,24 +92,21 @@ def generate_excel(df, rename_dict, color_rules):
     return output.getvalue()
 
 def generate_vendor_excel(df):
-    """⭐️ 委外廠商專屬 100% 官方排版匯出引擎"""
+    """⭐️ 委外廠商專屬匯出引擎"""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         workbook = writer.book
         worksheet = workbook.add_worksheet('委外廠商個資檔案清冊')
 
-        # 設定各種儲存格格式
         title_fmt = workbook.add_format({'bold': True, 'align': 'left', 'valign': 'vcenter', 'font_size': 11})
         hdr_main_fmt = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1})
         inst_fmt = workbook.add_format({'align': 'left', 'valign': 'vcenter', 'border': 1, 'bg_color': '#FFF2CC', 'text_wrap': True})
         data_fmt = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'text_wrap': True})
         data_text_fmt = workbook.add_format({'align': 'left', 'valign': 'vcenter', 'border': 1, 'text_wrap': True})
 
-        # 第 1 列：表單抬頭
         worksheet.set_row(0, 30)
         worksheet.merge_range(0, 0, 0, 35, "表單名稱：委外廠商個資檔案清冊\n表單編號：BM000-B-007-D001", title_fmt)
 
-        # 第 2-3 列：合併標題列
         worksheet.merge_range(1, 0, 2, 0, "編號", hdr_main_fmt)
         worksheet.merge_range(1, 1, 2, 1, "委外廠商名稱", hdr_main_fmt)
         
@@ -131,7 +128,6 @@ def generate_vendor_excel(df):
 
         worksheet.merge_range(1, 35, 2, 35, "備註", hdr_main_fmt)
 
-        # 第 4 列：黃底說明列
         worksheet.set_row(3, 110)
         worksheet.write(3, 0, "請依流水號進行填列", inst_fmt)
         worksheet.write(3, 1, "請填寫委外廠商名稱", inst_fmt)
@@ -139,9 +135,7 @@ def generate_vendor_excel(df):
         worksheet.write(3, 3, "請填列實體紙本、數位檔案、影像檔案、影音檔案\n(不同類型請填列不同筆)", inst_fmt)
         worksheet.write(3, 4, "填列筆數(數位、影像、影音)/份數(紙本)", inst_fmt)
         worksheet.write(3, 5, "識別該資料之使用目的", inst_fmt)
-        
         worksheet.merge_range(3, 6, 3, 27, "辨識檔案是否含有自然人之姓名、出生年月日、國民身分證統一編號、護照號碼、特徵…等個人資料\n(如有請填列Y，如無請填列N)", inst_fmt)
-        
         worksheet.write(3, 28, "請填列個人資料的來源", inst_fmt)
         worksheet.write(3, 29, "請填列資料來源管道 ，如：親自提供 / 郵件 / 傳真 / 雲端空間 / google表單 / 對外或對內系統(入口網站、FTP、其他公司系統等)", inst_fmt)
         worksheet.write(3, 30, "識別資料儲存地點及位置：\n(1) 如為實體紙本之取得 - 請填列儲存地點 - 例如：XX人員的上鎖櫃/XX檔案室的公用櫃/一般櫃\n(2) 如為數位檔案、影像檔案、影音檔案，請填列儲存地點，例如：XXX個人電腦/XXX公用檔案系統/XXXUSB、行動硬碟/XXX個人雲端空間", inst_fmt)
@@ -151,7 +145,6 @@ def generate_vendor_excel(df):
         worksheet.write(3, 34, "如傳送對象及目的之欄位有填列，請說明傳輸資料的方式，如親自提供 / 郵寄 / 掛號 / 快遞 / 傳真 / 檔案傳遞 / 雲端空間/google表單/對外或對內系統(入口網站、FTP、其他公司系統等)。\n(如無請填列N/A)", inst_fmt)
         worksheet.write(3, 35, "針對前面所填寫進行補充說明", inst_fmt)
 
-        # 填入真實資料
         col_keys = ["item_no", "vendor_name", "file_name", "file_type", "pi_amount", "pi_purpose"] + [f"scope_{s.split(chr(10))[0]}" for s in scopes] + ["data_source", "source_channel", "store_loc", "sys_name", "trans_target", "trans_purpose", "trans_method", "remark"]
         
         for row_idx, row_data in enumerate(df.to_dict('records')):
@@ -165,7 +158,6 @@ def generate_vendor_excel(df):
                 else:
                     worksheet.write(4 + row_idx, col_idx, val_clean, data_text_fmt)
 
-        # 設定欄位寬度
         worksheet.set_column(0, 0, 10)
         worksheet.set_column(1, 2, 20)
         worksheet.set_column(3, 5, 18)
@@ -203,7 +195,7 @@ if not st.session_state.auth:
     st.stop()
 
 # ==========================================
-# 3. 組織資料讀取
+# 3. 組織資料讀取 (提供安全清單)
 # ==========================================
 def fetch_org():
     try:
@@ -224,6 +216,9 @@ def fetch_org():
 df_dept, df_unit = fetch_org()
 dept_list = df_dept["dept_name"].dropna().unique().tolist() if not df_dept.empty else []
 unit_list = df_unit["unit_name"].dropna().unique().tolist() if not df_unit.empty else []
+
+# ⭐️ 防呆：如果資料庫完全沒有單位，給予提示文字而不是空清單
+safe_unit_list = unit_list if len(unit_list) > 0 else ["(請先至組織管理建立單位)"]
 
 # ==========================================
 # 5. 側邊欄與權限隔離邏輯
@@ -278,19 +273,16 @@ def save_data(table, edited_df, original_df):
 
 if menu == "1. 自檢表":
     st.markdown("### 🛡️ 自檢表管理")
-    st.info("💡 **操作提示**：若要在表格中選擇下拉選單，請在儲存格上 **【連點兩下 (Double Click)】** 即可喚出選項！")
-    if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
-    else: st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
-        
-    df = load_data("self_checklist")
+    st.info("💡 **操作提示**：連點兩下儲存格即可喚出下拉選單！若您非總管理員，【單位名稱】會被鎖定以防誤改，存檔時會自動帶入您的單位。")
     
+    df = load_data("self_checklist")
     cols = ["item_no", "unit_name", "project_name", "owner", "status", "pi_inventory_done", "vendor_mgmt_done", "vendor_name", "form_d001", "form_d002", "form_d003", "pi_destroyed"]
     for c in cols: 
         if c not in df.columns: df[c] = None
 
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=cols, column_config={
-        "id": None,
-        "item_no": "🟦項次", "unit_name": st.column_config.TextColumn("🟦單位", disabled=not is_admin),
+        "id": None, "item_no": "🟦項次", 
+        "unit_name": st.column_config.SelectboxColumn("🟦單位名稱", options=safe_unit_list, disabled=not is_admin),
         "project_name": "🟦業務名稱", "owner": "🟦負責人", "status": st.column_config.SelectboxColumn("🟦狀態", options=YN_OPTIONS),
         "pi_inventory_done": st.column_config.SelectboxColumn("🟦清冊建檔", options=YN_OPTIONS),
         "vendor_mgmt_done": st.column_config.SelectboxColumn("🟦委外管理", options=YN_OPTIONS),
@@ -311,9 +303,7 @@ if menu == "1. 自檢表":
 
 elif menu == "2. 個資清冊":
     st.markdown("### 📁 個資與機敏檔案清冊")
-    st.info("💡 **操作提示**：若要在表格中選擇下拉選單，請在儲存格上 **【連點兩下 (Double Click)】** 即可喚出選項！")
-    if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
-    else: st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
+    st.info("💡 **操作提示**：連點兩下儲存格即可喚出下拉選單！")
         
     scopes = ["姓名", "出生年月日", "身分證號碼", "護照號碼", "特徵", "指紋", "婚姻", "家庭", "教育職業", "病歷", "醫療", "基因", "性生活", "健康檢查", "犯罪前科", "聯絡方式", "財務情況", "社會活動", "車籍資料", "其他"]
     order = ["dept_name", "room_name", "pi_manager", "process_desc", "pi_amount", "legal_rule", "pi_purpose", "pi_category"]
@@ -400,9 +390,7 @@ elif menu == "2. 個資清冊":
 
 elif menu == "3. 風險評鑑":
     st.markdown("### ⚠️ 個人資料風險評鑑")
-    st.info("💡 **操作提示**：若要在表格中選擇下拉選單，請在儲存格上 **【連點兩下 (Double Click)】** 即可喚出選項！")
-    if is_admin: st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
-    else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
+    st.info("💡 **操作提示**：連點兩下儲存格即可喚出下拉選單！若您非總管理員，【單位名稱】會被鎖定以防誤改，存檔時會自動帶入您的單位。")
     
     st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
     
@@ -430,7 +418,7 @@ elif menu == "3. 風險評鑑":
 
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=risk_cols, column_config={
         "id": None, "item_no": "🟦編號",
-        "unit_name": st.column_config.SelectboxColumn("🟦單位名稱", options=unit_list, disabled=not is_admin), 
+        "unit_name": st.column_config.SelectboxColumn("🟦單位名稱", options=safe_unit_list, disabled=not is_admin), 
         "project_name": "🟦作業流程名稱",
         "score_1": st.column_config.SelectboxColumn("🟨(1) 個資數量", options=SCORE_1_OPTS, width="large"), 
         "score_2": st.column_config.SelectboxColumn("🟨(2) 個資敏感度", options=SCORE_2_OPTS, width="large"), 
@@ -457,9 +445,7 @@ elif menu == "3. 風險評鑑":
 
 elif menu == "4. 委外廠商":
     st.markdown("### 🤝 委外廠商個資清冊")
-    st.info("💡 **操作提示**：若要在表格中選擇下拉選單，請在儲存格上 **【連點兩下 (Double Click)】** 即可喚出選項！")
-    if is_admin: st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
-    else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
+    st.info("💡 **操作提示**：連點兩下儲存格即可喚出下拉選單！若您非總管理員，【單位名稱】會被鎖定以防誤改，存檔時會自動帶入您的單位。")
     
     vendor_scopes = [
         "姓名", "出生年月日", "國民身分證編號", "電話", "地址", "護照號碼", "特徵", "指紋", 
@@ -500,7 +486,8 @@ elif menu == "4. 委外廠商":
         if s == "車籍資料": rename_vendor_map[f"scope_{s}"] = "🟩車籍資料\n(車號、引擎號碼、車身號碼、底盤號碼等)"
         else: rename_vendor_map[f"scope_{s}"] = f"🟩{s}"
     
-    vendor_order = ["item_no", "vendor_name", "file_name", "file_type", "pi_amount", "pi_purpose"] + [f"scope_{s}" for s in vendor_scopes] + ["data_source", "source_channel", "store_loc", "sys_name", "trans_target", "trans_purpose", "trans_method", "remark"]
+    # ⭐️ 補回委外廠商清冊的 "單位名稱"
+    vendor_order = ["item_no", "unit_name", "vendor_name", "file_name", "file_type", "pi_amount", "pi_purpose"] + [f"scope_{s}" for s in vendor_scopes] + ["data_source", "source_channel", "store_loc", "sys_name", "trans_target", "trans_purpose", "trans_method", "remark"]
     
     ex_vendor_df = pd.DataFrame([ex_vendor_dict])[ [c for c in vendor_order if c in rename_vendor_map] ].rename(columns=rename_vendor_map)
     st.dataframe(ex_vendor_df.style.set_properties(**{'color': '#1E90FF', 'white-space': 'pre-wrap'}), hide_index=True)
@@ -510,11 +497,11 @@ elif menu == "4. 委外廠商":
         if c not in df.columns: df[c] = None
 
     cfg = {
-        "id": None, "unit_name": None,
+        "id": None, 
+        "unit_name": st.column_config.SelectboxColumn("🟦單位名稱", options=safe_unit_list, disabled=not is_admin),
         "item_no": "🟦編號", "vendor_name": "🟦委外廠商名稱", "file_name": "🟦個人資料檔案名稱",
         "file_type": st.column_config.SelectboxColumn("🟦檔案類型", options=FILE_TYPE_OPTIONS),
-        "pi_amount": st.column_config.SelectboxColumn("🟩筆數/份數", options=PI_AMOUNT_OPTIONS), # ⭐️ 已修正為下拉選單
-        "pi_purpose": "🟩個人資料檔案使用目的",
+        "pi_amount": "🟩筆數/份數", "pi_purpose": "🟩個人資料檔案使用目的",
         "data_source": "🟧資料來源", "source_channel": "🟧資料來源管道", "sys_name": "🟧資料鍵入之資訊系統",
         "trans_target": "🟧傳送對象", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式",
         "store_loc": "🟪儲存地點及位置", "remark": "⬜備註"
