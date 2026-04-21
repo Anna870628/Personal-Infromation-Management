@@ -278,6 +278,7 @@ def save_data(table, edited_df, original_df):
 
 if menu == "1. 自檢表":
     st.markdown("### 🛡️ 自檢表管理")
+    st.info("💡 **操作提示**：若要在表格中選擇下拉選單，請在儲存格上 **【連點兩下 (Double Click)】** 即可喚出選項！")
     if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
     else: st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
         
@@ -310,6 +311,7 @@ if menu == "1. 自檢表":
 
 elif menu == "2. 個資清冊":
     st.markdown("### 📁 個資與機敏檔案清冊")
+    st.info("💡 **操作提示**：若要在表格中選擇下拉選單，請在儲存格上 **【連點兩下 (Double Click)】** 即可喚出選項！")
     if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
     else: st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
         
@@ -319,7 +321,6 @@ elif menu == "2. 個資清冊":
     order += ["legal_basis", "collect_method", "sys_name", "sys_source", "use_target", "use_purpose", "use_method", "use_protect", "trans_target", "trans_purpose", "trans_method", "trans_protect", "store_loc", "store_legal_time", "store_inner_time", "store_protect", "del_method", "del_unit", "intl_country", "intl_target", "intl_purpose", "intl_method", "intl_protect"]
     
     st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
-    st.info("📌 **【個人資料範圍 (姓名 ~ 其他) 填寫說明】**：\n請依個人資料保護法施行細則第4條及第5條之規定，就所蒐集之個人資料，於該適當欄位填列 Y ，若無則填列 N ，但其他可直接或間接方式識別個人之資料(請於「其他」欄位直接列舉)。")
     
     example_dict = {
         "dept_name": "請填列部門名稱", "room_name": "請填列室名稱", "pi_manager": "請填列個資檔案管理者人員名稱", "process_desc": "請填列業務子流程名稱",
@@ -399,11 +400,11 @@ elif menu == "2. 個資清冊":
 
 elif menu == "3. 風險評鑑":
     st.markdown("### ⚠️ 個人資料風險評鑑")
+    st.info("💡 **操作提示**：若要在表格中選擇下拉選單，請在儲存格上 **【連點兩下 (Double Click)】** 即可喚出選項！")
     if is_admin: st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
     else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
     
     st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
-    st.info("📌 **【風險評鑑表填寫說明】**：\n請針對各項業務流程，於下拉選單選擇對應的風險等級 (5、3、1分)，並自行加總前5項分數填入「風險評分加總」，最後說明應對風險的作法。")
     
     example_risk_dict = {
         "item_no": "請依流水號進行填列", "unit_name": "請填列單位名稱", "project_name": "請填列業務子流程名稱",
@@ -427,7 +428,6 @@ elif menu == "3. 風險評鑑":
     for c in risk_cols: 
         if c not in df.columns: df[c] = None
 
-    # ⭐️ 修正：將風險評鑑表的單位名稱改為下拉選單
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=risk_cols, column_config={
         "id": None, "item_no": "🟦編號",
         "unit_name": st.column_config.SelectboxColumn("🟦單位名稱", options=unit_list, disabled=not is_admin), 
@@ -457,12 +457,10 @@ elif menu == "3. 風險評鑑":
 
 elif menu == "4. 委外廠商":
     st.markdown("### 🤝 委外廠商個資清冊")
+    st.info("💡 **操作提示**：若要在表格中選擇下拉選單，請在儲存格上 **【連點兩下 (Double Click)】** 即可喚出選項！")
     if is_admin: st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
     else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
     
-    # ------------------------------------------
-    # 🌟 委外廠商清冊
-    # ------------------------------------------
     vendor_scopes = [
         "姓名", "出生年月日", "國民身分證編號", "電話", "地址", "護照號碼", "特徵", "指紋", 
         "婚姻", "家庭", "教育", "職業", "病歷", "特種資料", "財務情況", "社會活動", 
@@ -470,7 +468,6 @@ elif menu == "4. 委外廠商":
     ]
     
     st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
-    st.info("📌 **【個人資料範圍填寫說明】**：\n辨識檔案是否含有自然人之姓名、出生年月日、國民身分證統一編號、護照號碼、特徵…等個人資料 (如有請下拉選擇Y，如無請選擇N)。")
     
     ex_vendor_dict = {
         "item_no": "請依流水號進行填列",
@@ -516,7 +513,8 @@ elif menu == "4. 委外廠商":
         "id": None, "unit_name": None,
         "item_no": "🟦編號", "vendor_name": "🟦委外廠商名稱", "file_name": "🟦個人資料檔案名稱",
         "file_type": st.column_config.SelectboxColumn("🟦檔案類型", options=FILE_TYPE_OPTIONS),
-        "pi_amount": "🟩筆數/份數", "pi_purpose": "🟩個人資料檔案使用目的",
+        "pi_amount": st.column_config.SelectboxColumn("🟩筆數/份數", options=PI_AMOUNT_OPTIONS), # ⭐️ 已修正為下拉選單
+        "pi_purpose": "🟩個人資料檔案使用目的",
         "data_source": "🟧資料來源", "source_channel": "🟧資料來源管道", "sys_name": "🟧資料鍵入之資訊系統",
         "trans_target": "🟧傳送對象", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式",
         "store_loc": "🟪儲存地點及位置", "remark": "⬜備註"
