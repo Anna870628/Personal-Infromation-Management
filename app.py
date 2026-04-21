@@ -58,7 +58,7 @@ SCORE_4_OPTS = ["5: 洩漏資訊，對個資當事人造成重大影響，如：
 SCORE_5_OPTS = ["5: 業務作業流程涉及外部廠商或第三方，且未簽訂保密協定或缺乏安全監督機制。", "3: 業務作業流程涉及外部廠商或第三方，已簽訂保密協定但缺乏定期監督或稽核。", "1: 業務作業流程無委外(僅內部作業)，或委外且具備完善保密協定與定期監督機制。"]
 
 def generate_excel(df, rename_dict, color_rules):
-    """通用匯出引擎 (保留給自檢表、個資清冊、風險評鑑表使用)"""
+    """通用匯出引擎"""
     export_df = df.copy()
     ordered_cols = [col for col in rename_dict.keys() if col in export_df.columns]
     export_df = export_df[ordered_cols].rename(columns=rename_dict)
@@ -92,11 +92,12 @@ def generate_excel(df, rename_dict, color_rules):
     return output.getvalue()
 
 def generate_vendor_excel(df):
-    """⭐️ 委外廠商專屬 100% 官方排版匯出引擎"""
+    """⭐️ 委外廠商專屬 100% 官方排版匯出引擎 (已修復 AttributeError)"""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         workbook = writer.book
-        worksheet = writer.sheets.add_worksheet('委外廠商個資檔案清冊')
+        # 【修復點】直接透過 workbook 建立 worksheet
+        worksheet = workbook.add_worksheet('委外廠商個資檔案清冊')
 
         # 設定各種儲存格格式
         title_fmt = workbook.add_format({'bold': True, 'align': 'left', 'valign': 'vcenter', 'font_size': 11})
@@ -160,7 +161,6 @@ def generate_vendor_excel(df):
                 val = row_data.get(col_key, "")
                 val_clean = val if pd.notnull(val) else ""
                 
-                # Y/N 等短資料置中，長文字靠左
                 if col_idx >= 6 and col_idx <= 27:
                     worksheet.write(4 + row_idx, col_idx, val_clean, data_fmt)
                 else:
@@ -170,7 +170,7 @@ def generate_vendor_excel(df):
         worksheet.set_column(0, 0, 10)
         worksheet.set_column(1, 2, 20)
         worksheet.set_column(3, 5, 18)
-        worksheet.set_column(6, 27, 6) # Y/N 欄位變窄
+        worksheet.set_column(6, 27, 6) 
         worksheet.set_column(28, 35, 25) 
 
     return output.getvalue()
