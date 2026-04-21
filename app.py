@@ -92,11 +92,10 @@ def generate_excel(df, rename_dict, color_rules):
     return output.getvalue()
 
 def generate_vendor_excel(df):
-    """⭐️ 委外廠商專屬 100% 官方排版匯出引擎 (已修復 AttributeError)"""
+    """⭐️ 委外廠商專屬 100% 官方排版匯出引擎"""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         workbook = writer.book
-        # 【修復點】直接透過 workbook 建立 worksheet
         worksheet = workbook.add_worksheet('委外廠商個資檔案清冊')
 
         # 設定各種儲存格格式
@@ -428,9 +427,10 @@ elif menu == "3. 風險評鑑":
     for c in risk_cols: 
         if c not in df.columns: df[c] = None
 
+    # ⭐️ 修正：將風險評鑑表的單位名稱改為下拉選單
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=risk_cols, column_config={
         "id": None, "item_no": "🟦編號",
-        "unit_name": st.column_config.TextColumn("🟦單位名稱", disabled=not is_admin), 
+        "unit_name": st.column_config.SelectboxColumn("🟦單位名稱", options=unit_list, disabled=not is_admin), 
         "project_name": "🟦作業流程名稱",
         "score_1": st.column_config.SelectboxColumn("🟨(1) 個資數量", options=SCORE_1_OPTS, width="large"), 
         "score_2": st.column_config.SelectboxColumn("🟨(2) 個資敏感度", options=SCORE_2_OPTS, width="large"), 
@@ -461,7 +461,7 @@ elif menu == "4. 委外廠商":
     else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
     
     # ------------------------------------------
-    # 🌟 委外廠商清冊：100% 依據最新 Excel 欄位對齊
+    # 🌟 委外廠商清冊
     # ------------------------------------------
     vendor_scopes = [
         "姓名", "出生年月日", "國民身分證編號", "電話", "地址", "護照號碼", "特徵", "指紋", 
@@ -507,7 +507,6 @@ elif menu == "4. 委外廠商":
     
     ex_vendor_df = pd.DataFrame([ex_vendor_dict])[ [c for c in vendor_order if c in rename_vendor_map] ].rename(columns=rename_vendor_map)
     st.dataframe(ex_vendor_df.style.set_properties(**{'color': '#1E90FF', 'white-space': 'pre-wrap'}), hide_index=True)
-    # ------------------------------------------
 
     df = load_data("vendor_inventory")
     for c in vendor_order:
@@ -536,7 +535,6 @@ elif menu == "4. 委外廠商":
         if st.button("💾 儲存廠商清冊"):
             if save_data("vendor_inventory", edited, df): time.sleep(0.5); st.rerun()
     with c2:
-        # 當點擊匯出時，使用專屬的 Excel 匯出引擎
         xl = generate_vendor_excel(edited)
         st.download_button("📥 匯出 Excel", xl, "委外廠商清冊.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
