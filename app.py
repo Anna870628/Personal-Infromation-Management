@@ -13,8 +13,6 @@ st.set_page_config(page_title="車美仕個資盤點系統", page_icon="🛡️"
 # 1. 定義共用選項與色彩映射邏輯
 # ==========================================
 YN_OPTIONS = ["Y", "N"]
-
-# 依照新需求更新筆數選項
 PI_AMOUNT_OPTIONS = [
     "每年產生大於100萬筆", 
     "每年產生10萬~100萬筆", 
@@ -50,7 +48,6 @@ LEGAL_BASIS_OPTIONS = [
     "D.協助公務機關執行法定職務或非公務機關履行法定義務所必要，且有適當安全維護措施",
     "E.經當事人書面同意"
 ]
-
 COLLECT_METHOD_OPTIONS = ["直接蒐集", "間接蒐集"]
 
 def generate_excel(df, rename_dict, color_rules):
@@ -230,8 +227,13 @@ elif menu == "2. 個資清冊":
     order += ["legal_basis", "collect_method", "sys_name", "sys_source", "use_target", "use_purpose", "use_method", "use_protect", "trans_target", "trans_purpose", "trans_method", "trans_protect", "store_loc", "store_legal_time", "store_inner_time", "store_protect", "del_method", "del_unit", "intl_country", "intl_target", "intl_purpose", "intl_method", "intl_protect"]
     
     # ------------------------------------------
-    # 🌟 依照 Excel 附件精確還原黃底說明列
+    # 🌟 黃底說明列：自動換行 & 模擬合併儲存格
     # ------------------------------------------
+    st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
+    
+    # 模擬 20 個個資欄位的「合併儲存格」說明
+    st.info("📌 **【個人資料範圍 (姓名 ~ 其他) 填寫說明】**：\n請依個人資料保護法施行細則第4條及第5條之規定，就所蒐集之個人資料，於該適當欄位填列 Y ，若無則填列 N ，但其他可直接或間接方式識別個人之資料(請於「其他」欄位直接列舉)。")
+    
     example_dict = {
         "dept_name": "請填列部門名稱", 
         "room_name": "請填列室名稱", 
@@ -241,33 +243,33 @@ elif menu == "2. 個資清冊":
         "legal_rule": "外部法規依據/內部規範依據/NA", 
         "pi_purpose": "請下拉選擇", 
         "pi_category": "請下拉選擇",
-        "legal_basis": "列示合法蒐集個資之依據，如：個資授權同意書、隱私權條款 (僅資料蒐集單位須填寫)", 
-        "collect_method": "屬於直接蒐集或間接蒐集 (僅資料蒐集單位須填寫)",
+        "legal_basis": "列示合法蒐集個資之依據，如：個資授權同意書、隱私權條款\n(僅資料蒐集單位須填寫)", 
+        "collect_method": "屬於直接蒐集或間接蒐集\n(僅資料蒐集單位須填寫)",
         "sys_name": "該筆個人資料涉及的系統或檔案名稱", 
         "sys_source": "請填寫個人資料(包括紙本文件跟電子檔案)的來源對象，不限公司內外單位；若個人資料來自於資訊系統，則填寫資訊系統名稱",
-        "use_target": "資料單位內使用者(如無請填列N/A)", 
-        "use_purpose": "使用目的如：資料建檔、廣告投放等(如無請填列N/A)",
-        "use_method": "如使用者及目的之欄位有填列，請說明使用資料的方式，如列印、下載 。(如無請填列N/A)", 
-        "use_protect": "如有填寫使用方式，應一併說明保護方式，如: 權限控管、刷卡等(如無請填列N/A)",
-        "trans_target": "資料傳送之對象(如:XXX委外廠商、XXX主管機關或XXX內部單位等)(如無請填列N/A)", 
-        "trans_purpose": "傳送目的(如無請填列N/A)",
-        "trans_method": "如傳送對象及目的之欄位有填列，請說明傳輸資料的方式，如親自提供 / 郵寄 / 掛號 / 快遞 / 傳真 / 檔案傳遞 / 對外或對內系統(入口網站、FTP、其他公司系統等)。(如無請填列N/A)", 
-        "trans_protect": "如有填寫傳送方式，應一併說明保護方式，如: 專人親送／親取／加密等(如無請填列N/A)",
+        "use_target": "資料單位內使用者\n(如無請填列N/A)", 
+        "use_purpose": "使用目的如：資料建檔、廣告投放等\n(如無請填列N/A)",
+        "use_method": "如使用者及目的之欄位有填列，請說明使用資料的方式，如列印、下載 。\n(如無請填列N/A)", 
+        "use_protect": "如有填寫使用方式，應一併說明保護方式，如: 權限控管、刷卡等\n(如無請填列N/A)",
+        "trans_target": "資料傳送之對象(如:XXX委外廠商、XXX主管機關或XXX內部單位等)\n(如無請填列N/A)", 
+        "trans_purpose": "傳送目的\n(如無請填列N/A)",
+        "trans_method": "如傳送對象及目的之欄位有填列，請說明傳輸資料的方式，如親自提供 / 郵寄 / 掛號 / 快遞 / 傳真 / 檔案傳遞 / 對外或對內系統(入口網站、FTP、其他公司系統等) 。\n(如無請填列N/A)", 
+        "trans_protect": "如有填寫傳送方式，應一併說明保護方式，如: 專人親送／親取／加密等\n(如無請填列N/A)",
         "store_loc": "如:實體櫃/雲端資料庫", 
         "store_legal_time": "法定保存年限",
         "store_inner_time": "公司內部規定保存年限", 
         "store_protect": "上鎖、密碼控管等",
         "del_method": "碎紙機銷毀、系統刪除等", 
         "del_unit": "負責執行銷毀之單位",
-        "intl_country": "傳送到其他國家(如無請填列N/A)", 
-        "intl_target": "傳送對象(如無請填列N/A)",
-        "intl_purpose": "傳送目的(如無請填列N/A)", 
-        "intl_method": "如傳送國家及目的之欄位有填列，請說明傳輸資料的方式，例如：檔案傳輸系統、應用程式與應用程式之間傳輸等。(如無請填列N/A)", 
-        "intl_protect": "保護方式(如無請填列N/A)"
+        "intl_country": "傳送到其他國家\n(如無請填列N/A)", 
+        "intl_target": "傳送對象\n(如無請填列N/A)",
+        "intl_purpose": "傳送目的\n(如無請填列N/A)", 
+        "intl_method": "如傳送國家及目的之欄位有填列，請說明傳輸資料的方式，例如：檔案傳輸系統、應用程式與應用程式之間傳輸等。\n(如無請填列N/A)", 
+        "intl_protect": "保護方式\n(如無請填列N/A)"
     }
     
     for s in scopes: 
-        example_dict[f"scope_{s}"] = "勾選Y或N"
+        example_dict[f"scope_{s}"] = "填 Y 或 N"
     example_dict["scope_其他"] = "請直接列舉"
     
     rename_mapping = {
@@ -284,8 +286,14 @@ elif menu == "2. 個資清冊":
     for s in scopes: rename_mapping[f"scope_{s}"] = f"🟩{s}"
     
     ex_df = pd.DataFrame([example_dict])[ [c for c in order if c in rename_mapping] ].rename(columns=rename_mapping)
-    st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
-    st.dataframe(ex_df.style.set_properties(**{'background-color': '#FFF2CC', 'color': '#000000'}), hide_index=True)
+    
+    # 加入 CSS 自動換行屬性 (white-space: pre-wrap)
+    styled_ex_df = ex_df.style.set_properties(**{
+        'background-color': '#FFF2CC', 
+        'color': '#000000',
+        'white-space': 'pre-wrap'
+    })
+    st.dataframe(styled_ex_df, hide_index=True)
     # ------------------------------------------
 
     df = load_data("pi_inventory")
