@@ -227,7 +227,7 @@ elif menu == "2. 個資清冊":
     order += ["legal_basis", "collect_method", "sys_name", "sys_source", "use_target", "use_purpose", "use_method", "use_protect", "trans_target", "trans_purpose", "trans_method", "trans_protect", "store_loc", "store_legal_time", "store_inner_time", "store_protect", "del_method", "del_unit", "intl_country", "intl_target", "intl_purpose", "intl_method", "intl_protect"]
     
     # ------------------------------------------
-    # 🌟 說明列：自動換行 & 移除黃底，改用提示藍色文字
+    # 🌟 說明列：自動換行 & 顏色調整為較淺的天空藍
     # ------------------------------------------
     st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
     
@@ -286,9 +286,9 @@ elif menu == "2. 個資清冊":
     
     ex_df = pd.DataFrame([example_dict])[ [c for c in order if c in rename_mapping] ].rename(columns=rename_mapping)
     
-    # 移除 background-color，加入文字顏色 color，保留 white-space
+    # 這裡將深藍色改為了更淺、更柔和的天空藍 (#1E90FF)
     styled_ex_df = ex_df.style.set_properties(**{
-        'color': '#0056b3', 
+        'color': '#1E90FF', 
         'white-space': 'pre-wrap'
     })
     st.dataframe(styled_ex_df, hide_index=True)
