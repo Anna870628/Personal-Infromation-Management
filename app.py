@@ -10,21 +10,24 @@ import time
 st.set_page_config(page_title="車美仕個資盤點系統", page_icon="🛡️", layout="wide")
 
 # ==========================================
-# 1. 定義共用選項與色彩映射邏輯
+# 1. 定義共用選項與色彩映射邏輯 (完整文字還原)
 # ==========================================
 YN_OPTIONS = ["Y", "N"]
 PI_AMOUNT_OPTIONS = ["每年產生大於1000筆", "每年產生100~1000筆", "每年產生小於100筆"]
+
+# 完整還原：不使用任何縮寫
 PI_PURPOSE_OPTIONS = [
-    "○○二 人事管理（包含甄選、離職及所屬員工基本資訊...等）",
+    "○○二 人事管理（包含甄選、離職及所屬員工基本資訊、現職、學經歷、考試分發、終身學習訓練進修、考績獎懲、銓審、薪資待遇、差勤、福利措施、褫奪公權、特殊查核或其他人事措施）",
     "○三一 全民健康保險、勞工保險、農民保險、國民年金保險或其他社會保險",
     "○四○ 行銷（包含金控共同行銷業務）",
-    "○五二 法人或團體對股東、會員...之內部管理",
+    "○五二 法人或團體對股東、會員（含股東、會員指派之代表）、董事、監察人、理事、監事或其他成員名冊之內部管理",
     "○六三 非公務機關依法定義務所進行個人資料之蒐集處理及利用",
     "○六九 契約、類似契約或其他法律關係事務",
     "○七七 訂位、住宿登記與購票業務",
     "○九○ 消費者、客戶管理與服務",
     "一五七 調查、統計與研究分析"
 ]
+
 PI_CATEGORY_OPTIONS = [
     "Ｃ○○一 辨識個人者", "Ｃ○○二 辨識財務者", "Ｃ○○三 政府資料中之辨識者",
     "Ｃ○一一 個人描述", "Ｃ○二一 家庭情形", "Ｃ○三一 住家及設施",
@@ -33,8 +36,10 @@ PI_CATEGORY_OPTIONS = [
     "Ｃ○六八 薪資與預扣款", "Ｃ一一一 健康紀錄", "Ｃ一三一 書面文件之檢索",
     "Ｃ一三二 未分類之資料"
 ]
+
 LEGAL_BASIS_OPTIONS = [
-    "A.法律明文規定", "B.履行法定義務所必要，且有適當安全維護措施",
+    "A.法律明文規定", 
+    "B.履行法定義務所必要，且有適當安全維護措施",
     "C.當事人自行公開或其他已合法公開之個人資料",
     "D.協助公務機關執行法定職務或非公務機關履行法定義務所必要，且有適當安全維護措施",
     "E.經當事人書面同意"
@@ -102,7 +107,7 @@ if not st.session_state.auth:
     st.stop()
 
 # ==========================================
-# 3. 組織資料讀取 (強制轉型，防止空表鎖死)
+# 3. 組織資料讀取 
 # ==========================================
 def fetch_org():
     try:
@@ -112,7 +117,6 @@ def fetch_org():
         df_d = pd.DataFrame(d) if d else pd.DataFrame(columns=["id", "dept_name"])
         df_u = pd.DataFrame(u) if u else pd.DataFrame(columns=["id", "dept_name", "unit_name"])
         
-        # 強制轉型，確保 Streamlit 知道這是文字欄位，不會在新增時鎖死
         df_d["dept_name"] = df_d["dept_name"].astype("string")
         df_u["dept_name"] = df_u["dept_name"].astype("string")
         df_u["unit_name"] = df_u["unit_name"].astype("string")
@@ -141,8 +145,6 @@ def load_data(table):
     return pd.DataFrame(res or [])
 
 def save_data(table, edited_df, original_df):
-    """資料存檔：自動比對原生刪除、掛載單位與防呆"""
-    # 處理刪除邏輯
     if not original_df.empty and "id" in original_df.columns:
         orig_ids = set(original_df["id"].dropna().astype(str).tolist())
         edit_ids = set(edited_df["id"].dropna().astype(str).tolist()) if "id" in edited_df.columns else set()
@@ -150,7 +152,6 @@ def save_data(table, edited_df, original_df):
         if deleted: 
             supabase.table(table).delete().in_("id", deleted).execute()
 
-    # 自動補齊 unit_name
     if not is_admin and table not in ["departments", "units"]:
         edited_df["unit_name"] = user_unit
 
@@ -159,7 +160,6 @@ def save_data(table, edited_df, original_df):
     valid = []
     for r in records:
         meaningful_keys = [k for k in r.keys() if k not in ['id', 'unit_name']]
-        # 確保有實質資料才寫入
         if any(r[k] is not None and str(r[k]).strip() != "" for k in meaningful_keys):
             if pd.isna(r.get('id')): r.pop('id', None)
             valid.append(r)
@@ -182,8 +182,8 @@ def save_data(table, edited_df, original_df):
 
 if menu == "1. 自檢表":
     st.markdown("### 🛡️ 自檢表管理")
-    if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。💡 刪除方式：勾選最左側框框 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
-    else: st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：勾選最左側框框 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
+    if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
+    else: st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
         
     df = load_data("self_checklist")
     
@@ -214,8 +214,8 @@ if menu == "1. 自檢表":
 
 elif menu == "2. 個資清冊":
     st.markdown("### 📁 個資與機敏檔案清冊")
-    if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。💡 刪除方式：勾選最左側框框 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
-    else: st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：勾選最左側框框 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
+    if is_admin: st.info("👁️ 目前身分：【總管理員】，可看見全公司資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
+    else: st.info(f"🔒 目前身分：【{user_unit}】，僅顯示本單位資料。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
         
     df = load_data("pi_inventory")
     
@@ -268,8 +268,8 @@ elif menu == "2. 個資清冊":
 
 elif menu == "3. 風險評鑑":
     st.markdown("### ⚠️ 個人資料風險評鑑")
-    if is_admin: st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：勾選最左側框框 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
-    else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：勾選最左側框框 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
+    if is_admin: st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
+    else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
         
     df = load_data("risk_assessment")
     score_cols = ["score_1", "score_2", "score_3", "score_4", "score_5"]
@@ -300,8 +300,8 @@ elif menu == "3. 風險評鑑":
 
 elif menu == "4. 委外廠商":
     st.markdown("### 🤝 委外廠商個資清冊")
-    if is_admin: st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：勾選最左側框框 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
-    else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：勾選最左側框框 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
+    if is_admin: st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
+    else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
         
     df = load_data("vendor_inventory")
     cols = ["unit_name", "vendor_name", "file_name", "pi_scope", "trans_purpose", "trans_method"]
@@ -327,12 +327,11 @@ elif menu == "4. 委外廠商":
 
 elif menu == "5. 組織管理":
     st.markdown("### 🏢 組織架構管理")
-    st.info("💡 刪除方式：勾選最左側框框 -> 按鍵盤 `Delete` 鍵 -> 點擊下方儲存。連點兩下儲存格即可開始輸入！")
+    st.info("💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。連點兩下儲存格即可開始輸入！")
     
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("1. 部門 CRUD")
-        # 【修復點】明確加上 TextColumn 設定，確保能編輯
         ed_d = st.data_editor(
             df_dept, num_rows="dynamic", use_container_width=True, 
             column_order=["dept_name"],
@@ -346,7 +345,6 @@ elif menu == "5. 組織管理":
             
     with c2:
         st.subheader("2. 單位 CRUD")
-        # 【修復點】明確加上 TextColumn 與 SelectboxColumn 設定
         opts = dept_list if dept_list else ["(請先建立部門)"]
         ed_u = st.data_editor(
             df_unit, num_rows="dynamic", use_container_width=True, 
