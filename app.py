@@ -218,7 +218,7 @@ elif menu == "2. 個資清冊":
     order += ["legal_basis", "collect_method", "sys_name", "sys_source", "use_target", "use_purpose", "use_method", "use_protect", "trans_target", "trans_purpose", "trans_method", "trans_protect", "store_loc", "store_legal_time", "store_inner_time", "store_protect", "del_method", "del_unit", "intl_country", "intl_target", "intl_purpose", "intl_method", "intl_protect"]
     
     # ------------------------------------------
-    # 🌟 新增：黃底說明列 (視覺獨立，不會混入資料庫)
+    # 🌟 黃底說明列：已修正重複的欄位名稱
     # ------------------------------------------
     example_dict = {
         "dept_name": "請選擇部名稱", "room_name": "請選擇室名稱", 
@@ -239,16 +239,17 @@ elif menu == "2. 個資清冊":
     }
     for s in scopes: example_dict[f"scope_{s}"] = "勾選Y或N"
     
-    # 將範例對齊顯示的欄位名稱
+    # 確保每個欄位名稱都是獨一無二的，避免 KeyError
     rename_mapping = {
         "dept_name": "🟦部名稱", "room_name": "🟦室名稱", "pi_manager": "🟦個資檔案管理者", "process_desc": "🟦業務流程說明",
         "pi_amount": "🟩筆數/份數", "legal_rule": "🟩法源/內部規範依據", "pi_purpose": "🟩特定目的", "pi_category": "🟩個資之類別",
         "legal_basis": "🟩合法蒐集依據", "collect_method": "🟩蒐集方式",
-        "sys_name": "🟧應用系統名稱", "sys_source": "🟧來源", "use_target": "🟧使用對象", "use_purpose": "🟧使用目的", "use_method": "🟧使用方式", "use_protect": "🟧保護方式",
-        "trans_target": "🟧傳送對象", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式", "trans_protect": "🟧保護方式",
-        "store_loc": "🟪儲存位置", "store_legal_time": "🟪法定時限", "store_inner_time": "🟪內部保存期限", "store_protect": "🟪保護措施",
+        "sys_name": "🟧應用系統名稱", "sys_source": "🟧來源", 
+        "use_target": "🟧使用對象", "use_purpose": "🟧使用目的", "use_method": "🟧使用方式", "use_protect": "🟧使用保護方式",
+        "trans_target": "🟧傳送對象", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式", "trans_protect": "🟧傳送保護方式",
+        "store_loc": "🟪儲存位置", "store_legal_time": "🟪法定時限", "store_inner_time": "🟪內部保存期限", "store_protect": "🟪儲存保護措施",
         "del_method": "🟪刪除方式", "del_unit": "🟪刪除單位",
-        "intl_country": "🟥傳送國家", "intl_target": "🟥傳送對象", "intl_purpose": "🟥傳送目的", "intl_method": "🟥傳送方式", "intl_protect": "🟥保護方式"
+        "intl_country": "🟥傳送國家", "intl_target": "🟥國際傳送對象", "intl_purpose": "🟥國際傳送目的", "intl_method": "🟥國際傳送方式", "intl_protect": "🟥國際保護方式"
     }
     for s in scopes: rename_mapping[f"scope_{s}"] = f"🟩{s}"
     
@@ -261,6 +262,7 @@ elif menu == "2. 個資清冊":
     for c in order:
         if c not in df.columns: df[c] = None
 
+    # 對應確保真實資料表的欄位名稱也唯一
     cfg = {
         "id": None, "unit_name": None, 
         "dept_name": st.column_config.SelectboxColumn("🟦部名稱", options=dept_list),
@@ -273,11 +275,11 @@ elif menu == "2. 個資清冊":
         "legal_basis": st.column_config.SelectboxColumn("🟩合法蒐集依據", options=LEGAL_BASIS_OPTIONS),
         "collect_method": st.column_config.SelectboxColumn("🟩蒐集方式", options=COLLECT_METHOD_OPTIONS),
         "sys_name": "🟧應用系統名稱", "sys_source": "🟧來源",
-        "use_target": "🟧使用對象", "use_purpose": "🟧使用目的", "use_method": "🟧使用方式", "use_protect": "🟧保護方式",
-        "trans_target": "🟧傳送對象", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式", "trans_protect": "🟧保護方式",
-        "store_loc": "🟪儲存位置", "store_legal_time": "🟪法定時限", "store_inner_time": "🟪內部保存期限", "store_protect": "🟪保護措施",
+        "use_target": "🟧使用對象", "use_purpose": "🟧使用目的", "use_method": "🟧使用方式", "use_protect": "🟧使用保護方式",
+        "trans_target": "🟧傳送對象", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式", "trans_protect": "🟧傳送保護方式",
+        "store_loc": "🟪儲存位置", "store_legal_time": "🟪法定時限", "store_inner_time": "🟪內部保存期限", "store_protect": "🟪儲存保護措施",
         "del_method": "🟪刪除方式", "del_unit": "🟪刪除單位",
-        "intl_country": "🟥傳送國家", "intl_target": "🟥傳送對象", "intl_purpose": "🟥傳送目的", "intl_method": "🟥傳送方式", "intl_protect": "🟥保護方式"
+        "intl_country": "🟥傳送國家", "intl_target": "🟥國際傳送對象", "intl_purpose": "🟥國際傳送目的", "intl_method": "🟥國際傳送方式", "intl_protect": "🟥國際保護方式"
     }
     for s in scopes: cfg[f"scope_{s}"] = st.column_config.SelectboxColumn(f"🟩{s}", options=YN_OPTIONS)
 
@@ -361,7 +363,7 @@ elif menu == "4. 委外廠商":
 
 elif menu == "5. 組織管理":
     st.markdown("### 🏢 組織架構管理")
-    st.info("💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。連點兩下儲存格即可開始輸入！")
+    st.info("💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊下方儲存。連點兩下儲存格即可開始輸入！")
     
     c1, c2 = st.columns(2)
     with c1:
