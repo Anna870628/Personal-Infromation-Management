@@ -13,7 +13,16 @@ st.set_page_config(page_title="車美仕個資盤點系統", page_icon="🛡️"
 # 1. 定義共用選項與色彩映射邏輯
 # ==========================================
 YN_OPTIONS = ["Y", "N"]
-PI_AMOUNT_OPTIONS = ["每年產生大於1000筆", "每年產生100~1000筆", "每年產生小於100筆"]
+
+# 依照新需求更新筆數選項
+PI_AMOUNT_OPTIONS = [
+    "每年產生大於100萬筆", 
+    "每年產生10萬~100萬筆", 
+    "每年產生1萬~10萬筆", 
+    "每年產生1000~1萬筆", 
+    "每年產生小於1000筆"
+]
+
 PI_PURPOSE_OPTIONS = [
     "○○二 人事管理（包含甄選、離職及所屬員工基本資訊、現職、學經歷、考試分發、終身學習訓練進修、考績獎懲、銓審、薪資待遇、差勤、福利措施、褫奪公權、特殊查核或其他人事措施）",
     "○三一 全民健康保險、勞工保險、農民保險、國民年金保險或其他社會保險",
@@ -25,6 +34,7 @@ PI_PURPOSE_OPTIONS = [
     "○九○ 消費者、客戶管理與服務",
     "一五七 調查、統計與研究分析"
 ]
+
 PI_CATEGORY_OPTIONS = [
     "Ｃ○○一 辨識個人者", "Ｃ○○二 辨識財務者", "Ｃ○○三 政府資料中之辨識者",
     "Ｃ○一一 個人描述", "Ｃ○二一 家庭情形", "Ｃ○三一 住家及設施",
@@ -33,12 +43,14 @@ PI_CATEGORY_OPTIONS = [
     "Ｃ○六八 薪資與預扣款", "Ｃ一一一 健康紀錄", "Ｃ一三一 書面文件之檢索",
     "Ｃ一三二 未分類之資料"
 ]
+
 LEGAL_BASIS_OPTIONS = [
     "A.法律明文規定", "B.履行法定義務所必要，且有適當安全維護措施",
     "C.當事人自行公開或其他已合法公開之個人資料",
     "D.協助公務機關執行法定職務或非公務機關履行法定義務所必要，且有適當安全維護措施",
     "E.經當事人書面同意"
 ]
+
 COLLECT_METHOD_OPTIONS = ["直接蒐集", "間接蒐集"]
 
 def generate_excel(df, rename_dict, color_rules):
@@ -218,28 +230,46 @@ elif menu == "2. 個資清冊":
     order += ["legal_basis", "collect_method", "sys_name", "sys_source", "use_target", "use_purpose", "use_method", "use_protect", "trans_target", "trans_purpose", "trans_method", "trans_protect", "store_loc", "store_legal_time", "store_inner_time", "store_protect", "del_method", "del_unit", "intl_country", "intl_target", "intl_purpose", "intl_method", "intl_protect"]
     
     # ------------------------------------------
-    # 🌟 黃底說明列：已修正重複的欄位名稱
+    # 🌟 依照 Excel 附件精確還原黃底說明列
     # ------------------------------------------
     example_dict = {
-        "dept_name": "請選擇部名稱", "room_name": "請選擇室名稱", 
-        "pi_manager": "請填列個資檔案管理者人員名稱", "process_desc": "請填列業務子流程名稱",
-        "pi_amount": "請選擇約略數量", "legal_rule": "列示法規或內部規範", 
-        "pi_purpose": "請下拉選擇", "pi_category": "請下拉選擇",
-        "legal_basis": "列示合法蒐集個資之依據", "collect_method": "直接蒐集或間接蒐集",
-        "sys_name": "該筆個資涉及的系統或檔案名稱", "sys_source": "請填寫個資來源對象",
-        "use_target": "資料單位內使用者(如無請填N/A)", "use_purpose": "使用目的如：資料建檔等(如無請填N/A)",
-        "use_method": "使用資料的方式(如無請填N/A)", "use_protect": "權限控管、刷卡等(如無請填N/A)",
-        "trans_target": "資料傳送之對象(如無請填N/A)", "trans_purpose": "傳送目的(如無請填N/A)",
-        "trans_method": "傳輸資料的方式(如無請填N/A)", "trans_protect": "專人親送／加密等(如無請填N/A)",
-        "store_loc": "如:實體櫃/雲端資料庫", "store_legal_time": "法定保存年限",
-        "store_inner_time": "公司內部規定保存年限", "store_protect": "上鎖、密碼控管等",
-        "del_method": "碎紙機銷毀、系統刪除等", "del_unit": "負責執行銷毀之單位",
-        "intl_country": "傳送到其他國家(如無請填N/A)", "intl_target": "傳送對象(如無請填N/A)",
-        "intl_purpose": "傳送目的(如無請填N/A)", "intl_method": "傳輸方式(如無請填N/A)", "intl_protect": "保護方式(如無請填N/A)"
+        "dept_name": "請填列部門名稱", 
+        "room_name": "請填列室名稱", 
+        "pi_manager": "請填列個資檔案管理者人員名稱", 
+        "process_desc": "請填列業務子流程名稱",
+        "pi_amount": "請選擇約略數量", 
+        "legal_rule": "外部法規依據/內部規範依據/NA", 
+        "pi_purpose": "請下拉選擇", 
+        "pi_category": "請下拉選擇",
+        "legal_basis": "列示合法蒐集個資之依據，如：個資授權同意書、隱私權條款 (僅資料蒐集單位須填寫)", 
+        "collect_method": "屬於直接蒐集或間接蒐集 (僅資料蒐集單位須填寫)",
+        "sys_name": "該筆個人資料涉及的系統或檔案名稱", 
+        "sys_source": "請填寫個人資料(包括紙本文件跟電子檔案)的來源對象，不限公司內外單位；若個人資料來自於資訊系統，則填寫資訊系統名稱",
+        "use_target": "資料單位內使用者(如無請填列N/A)", 
+        "use_purpose": "使用目的如：資料建檔、廣告投放等(如無請填列N/A)",
+        "use_method": "如使用者及目的之欄位有填列，請說明使用資料的方式，如列印、下載 。(如無請填列N/A)", 
+        "use_protect": "如有填寫使用方式，應一併說明保護方式，如: 權限控管、刷卡等(如無請填列N/A)",
+        "trans_target": "資料傳送之對象(如:XXX委外廠商、XXX主管機關或XXX內部單位等)(如無請填列N/A)", 
+        "trans_purpose": "傳送目的(如無請填列N/A)",
+        "trans_method": "如傳送對象及目的之欄位有填列，請說明傳輸資料的方式，如親自提供 / 郵寄 / 掛號 / 快遞 / 傳真 / 檔案傳遞 / 對外或對內系統(入口網站、FTP、其他公司系統等)。(如無請填列N/A)", 
+        "trans_protect": "如有填寫傳送方式，應一併說明保護方式，如: 專人親送／親取／加密等(如無請填列N/A)",
+        "store_loc": "如:實體櫃/雲端資料庫", 
+        "store_legal_time": "法定保存年限",
+        "store_inner_time": "公司內部規定保存年限", 
+        "store_protect": "上鎖、密碼控管等",
+        "del_method": "碎紙機銷毀、系統刪除等", 
+        "del_unit": "負責執行銷毀之單位",
+        "intl_country": "傳送到其他國家(如無請填列N/A)", 
+        "intl_target": "傳送對象(如無請填列N/A)",
+        "intl_purpose": "傳送目的(如無請填列N/A)", 
+        "intl_method": "如傳送國家及目的之欄位有填列，請說明傳輸資料的方式，例如：檔案傳輸系統、應用程式與應用程式之間傳輸等。(如無請填列N/A)", 
+        "intl_protect": "保護方式(如無請填列N/A)"
     }
-    for s in scopes: example_dict[f"scope_{s}"] = "勾選Y或N"
     
-    # 確保每個欄位名稱都是獨一無二的，避免 KeyError
+    for s in scopes: 
+        example_dict[f"scope_{s}"] = "勾選Y或N"
+    example_dict["scope_其他"] = "請直接列舉"
+    
     rename_mapping = {
         "dept_name": "🟦部名稱", "room_name": "🟦室名稱", "pi_manager": "🟦個資檔案管理者", "process_desc": "🟦業務流程說明",
         "pi_amount": "🟩筆數/份數", "legal_rule": "🟩法源/內部規範依據", "pi_purpose": "🟩特定目的", "pi_category": "🟩個資之類別",
@@ -254,7 +284,7 @@ elif menu == "2. 個資清冊":
     for s in scopes: rename_mapping[f"scope_{s}"] = f"🟩{s}"
     
     ex_df = pd.DataFrame([example_dict])[ [c for c in order if c in rename_mapping] ].rename(columns=rename_mapping)
-    st.markdown("##### 💡 填寫範例與說明參考")
+    st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
     st.dataframe(ex_df.style.set_properties(**{'background-color': '#FFF2CC', 'color': '#000000'}), hide_index=True)
     # ------------------------------------------
 
@@ -262,7 +292,6 @@ elif menu == "2. 個資清冊":
     for c in order:
         if c not in df.columns: df[c] = None
 
-    # 對應確保真實資料表的欄位名稱也唯一
     cfg = {
         "id": None, "unit_name": None, 
         "dept_name": st.column_config.SelectboxColumn("🟦部名稱", options=dept_list),
