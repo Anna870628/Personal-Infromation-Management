@@ -49,33 +49,14 @@ LEGAL_BASIS_OPTIONS = [
     "E.經當事人書面同意"
 ]
 COLLECT_METHOD_OPTIONS = ["直接蒐集", "間接蒐集"]
+FILE_TYPE_OPTIONS = ["實體紙本", "數位檔案", "影像檔案", "影音檔案"]
 
-# --- 風險評鑑表下拉選單選項 ---
-SCORE_1_OPTS = [
-    "5: 每年產生大於1000筆",
-    "3: 每年產生100~1000筆",
-    "1: 每年產生小於100筆"
-]
-SCORE_2_OPTS = [
-    "5: 包含姓名、身分證號、私人連絡方式(電話+地址)、財務情況、指紋、特種個資",
-    "3: 包含姓名、身分證號、護照、私人聯絡方式(電話及地址)、其他非特種個資欄位",
-    "1: 僅含姓名、聯絡方式(電話)"
-]
-SCORE_3_OPTS = [
-    "5: 若作業發生個資外洩事故，將導致公司形象、信譽受到非常嚴重損害，如：導致國際性媒體報導負面新聞、造成民眾集結遊行抗爭或上級機關關切等情形。",
-    "3: 若作業發生個資外洩事故，將導致公司形象、信譽受到嚴重損害，如：導致3家以上媒體報導負面新聞或造成民眾至機關抗議或陳情等情形。",
-    "1: 若該作業發生個資外洩事故，將導致公司形象、信譽受到輕微損害，如：導致部份媒體報導負面新聞、造成多位民眾電話抱怨等情形。"
-]
-SCORE_4_OPTS = [
-    "5: 洩漏資訊，對個資當事人造成重大影響，如：勒索、綁架、甚至危及生命安全或造成重大財產損失。",
-    "3: 洩漏資訊，對個資當事人有中度影響，如：身分遭冒用、詐騙、影響個人信用或造成部分財產損失。",
-    "1: 洩漏資訊，對個資當事人影響較輕微，如：收到推銷電話、垃圾郵件等滋擾。"
-]
-SCORE_5_OPTS = [
-    "5: 業務作業流程涉及外部廠商或第三方，且未簽訂保密協定或缺乏安全監督機制。",
-    "3: 業務作業流程涉及外部廠商或第三方，已簽訂保密協定但缺乏定期監督或稽核。",
-    "1: 業務作業流程無委外(僅內部作業)，或委外且具備完善保密協定與定期監督機制。"
-]
+# 風險評鑑表下拉選單
+SCORE_1_OPTS = ["5: 每年產生大於1000筆", "3: 每年產生100~1000筆", "1: 每年產生小於100筆"]
+SCORE_2_OPTS = ["5: 包含姓名、身分證號、私人連絡方式(電話+地址)、財務情況、指紋、特種個資", "3: 包含姓名、身分證號、護照、私人聯絡方式(電話及地址)、其他非特種個資欄位", "1: 僅含姓名、聯絡方式(電話)"]
+SCORE_3_OPTS = ["5: 若作業發生個資外洩事故，將導致公司形象、信譽受到非常嚴重損害，如：導致國際性媒體報導負面新聞、造成民眾集結遊行抗爭或上級機關關切等情形。", "3: 若作業發生個資外洩事故，將導致公司形象、信譽受到嚴重損害，如：導致3家以上媒體報導負面新聞或造成民眾至機關抗議或陳情等情形。", "1: 若該作業發生個資外洩事故，將導致公司形象、信譽受到輕微損害，如：導致部份媒體報導負面新聞、造成多位民眾電話抱怨等情形。"]
+SCORE_4_OPTS = ["5: 洩漏資訊，對個資當事人造成重大影響，如：勒索、綁架、甚至危及生命安全或造成重大財產損失。", "3: 洩漏資訊，對個資當事人有中度影響，如：身分遭冒用、詐騙、影響個人信用或造成部分財產損失。", "1: 洩漏資訊，對個資當事人影響較輕微，如：收到推銷電話、垃圾郵件等滋擾。"]
+SCORE_5_OPTS = ["5: 業務作業流程涉及外部廠商或第三方，且未簽訂保密協定或缺乏安全監督機制。", "3: 業務作業流程涉及外部廠商或第三方，已簽訂保密協定但缺乏定期監督或稽核。", "1: 業務作業流程無委外(僅內部作業)，或委外且具備完善保密協定與定期監督機制。"]
 
 def generate_excel(df, rename_dict, color_rules):
     export_df = df.copy()
@@ -94,7 +75,8 @@ def generate_excel(df, rename_dict, color_rules):
             "orange": workbook.add_format({'bg_color': '#FCE4D6', 'border': 1, 'bold': True}), 
             "yellow": workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'bold': True}), 
             "purple": workbook.add_format({'bg_color': '#E1DFED', 'border': 1, 'bold': True}), 
-            "red": workbook.add_format({'bg_color': '#F2DCDB', 'border': 1, 'bold': True}),    
+            "red": workbook.add_format({'bg_color': '#F2DCDB', 'border': 1, 'bold': True}),
+            "grey": workbook.add_format({'bg_color': '#D9D9D9', 'border': 1, 'bold': True}),
         }
         
         for col_num, value in enumerate(export_df.columns.values):
@@ -105,7 +87,7 @@ def generate_excel(df, rename_dict, color_rules):
                     break
             if fmt_key in formats:
                 worksheet.write(0, col_num, value, formats[fmt_key])
-            worksheet.set_column(col_num, col_num, 25) # 加寬一點讓說明文字較好閱讀
+            worksheet.set_column(col_num, col_num, 25) 
             
     return output.getvalue()
 
@@ -287,9 +269,7 @@ elif menu == "2. 個資清冊":
     for s in scopes: rename_mapping[f"scope_{s}"] = f"🟩{s}"
     
     ex_df = pd.DataFrame([example_dict])[ [c for c in order if c in rename_mapping] ].rename(columns=rename_mapping)
-    styled_ex_df = ex_df.style.set_properties(**{'color': '#1E90FF', 'white-space': 'pre-wrap'})
-    st.dataframe(styled_ex_df, hide_index=True)
-    # ------------------------------------------
+    st.dataframe(ex_df.style.set_properties(**{'color': '#1E90FF', 'white-space': 'pre-wrap'}), hide_index=True)
 
     df = load_data("pi_inventory")
     for c in order:
@@ -339,41 +319,25 @@ elif menu == "3. 風險評鑑":
     if is_admin: st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
     else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
     
-    # ------------------------------------------
-    # 🌟 新增：風險評鑑表 提示藍色說明範例列
-    # ------------------------------------------
     st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
-    st.info("📌 **【風險評鑑表填寫說明】**：\n請針對各項業務流程，於下拉選單選擇對應的風險等級 (1、3、5分)，並自行加總前5項分數填入「風險評分加總」，最後說明應對風險的作法。")
+    st.info("📌 **【風險評鑑表填寫說明】**：\n請針對各項業務流程，於下拉選單選擇對應的風險等級 (5、3、1分)，並自行加總前5項分數填入「風險評分加總」，最後說明應對風險的作法。")
     
     example_risk_dict = {
-        "item_no": "請依流水號進行填列",
-        "unit_name": "請填列單位名稱",
-        "project_name": "請填列業務子流程名稱",
-        "score_1": "請下拉選擇 (5, 3, 1)",
-        "score_2": "請下拉選擇 (5, 3, 1)",
-        "score_3": "請下拉選擇 (5, 3, 1)",
-        "score_4": "請下拉選擇 (5, 3, 1)",
-        "score_5": "請下拉選擇 (5, 3, 1)",
-        "total_score": "將前5項評分加總(最高25分)",
-        "risk_action": "說明風險對應作法(如: 維持現狀、增加控管)"
+        "item_no": "請依流水號進行填列", "unit_name": "請填列單位名稱", "project_name": "請填列業務子流程名稱",
+        "score_1": "請下拉選擇 (5, 3, 1)", "score_2": "請下拉選擇 (5, 3, 1)", "score_3": "請下拉選擇 (5, 3, 1)",
+        "score_4": "請下拉選擇 (5, 3, 1)", "score_5": "請下拉選擇 (5, 3, 1)",
+        "total_score": "將前5項評分加總(最高25分)", "risk_action": "說明風險對應作法(如: 維持現狀、增加控管)"
     }
     
     rename_risk_map = {
-        "item_no": "🟦編號",
-        "unit_name": "🟦單位名稱",
-        "project_name": "🟦作業流程名稱",
-        "score_1": "🟨(1) 個資數量",
-        "score_2": "🟨(2) 個資敏感度",
-        "score_3": "🟨(3) 損害組織信譽",
-        "score_4": "🟨(4) 當事人隱私衝擊",
-        "score_5": "🟨(5) 業務合作單位",
-        "total_score": "🟨風險評分加總",
-        "risk_action": "🟩風險對應作法"
+        "item_no": "🟦編號", "unit_name": "🟦單位名稱", "project_name": "🟦作業流程名稱",
+        "score_1": "🟨(1) 個資數量", "score_2": "🟨(2) 個資敏感度", "score_3": "🟨(3) 損害組織信譽", 
+        "score_4": "🟨(4) 當事人隱私衝擊", "score_5": "🟨(5) 業務合作單位",
+        "total_score": "🟨風險評分加總", "risk_action": "🟩風險對應作法"
     }
     
     ex_risk_df = pd.DataFrame([example_risk_dict]).rename(columns=rename_risk_map)
     st.dataframe(ex_risk_df.style.set_properties(**{'color': '#1E90FF', 'white-space': 'pre-wrap'}), hide_index=True)
-    # ------------------------------------------
 
     df = load_data("risk_assessment")
     risk_cols = ["item_no", "unit_name", "project_name", "score_1", "score_2", "score_3", "score_4", "score_5", "total_score", "risk_action"]
@@ -381,8 +345,7 @@ elif menu == "3. 風險評鑑":
         if c not in df.columns: df[c] = None
 
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=risk_cols, column_config={
-        "id": None, 
-        "item_no": "🟦編號",
+        "id": None, "item_no": "🟦編號",
         "unit_name": st.column_config.TextColumn("🟦單位名稱", disabled=not is_admin), 
         "project_name": "🟦作業流程名稱",
         "score_1": st.column_config.SelectboxColumn("🟨(1) 個資數量", options=SCORE_1_OPTS, width="large"), 
@@ -390,8 +353,7 @@ elif menu == "3. 風險評鑑":
         "score_3": st.column_config.SelectboxColumn("🟨(3) 損害組織信譽", options=SCORE_3_OPTS, width="large"), 
         "score_4": st.column_config.SelectboxColumn("🟨(4) 當事人隱私衝擊", options=SCORE_4_OPTS, width="large"), 
         "score_5": st.column_config.SelectboxColumn("🟨(5) 業務合作單位", options=SCORE_5_OPTS, width="large"),
-        "total_score": "🟨風險評分加總",
-        "risk_action": "🟩風險對應作法"
+        "total_score": "🟨風險評分加總", "risk_action": "🟩風險對應作法"
     })
     
     c1, c2 = st.columns([1, 6])
@@ -405,11 +367,7 @@ elif menu == "3. 風險評鑑":
             "score_4": "(4) 當事人隱私衝擊", "score_5": "(5) 業務合作單位",
             "total_score": "風險評分加總", "risk_action": "風險對應作法"
         }
-        rules = {
-            "blue": ["編號", "作業流程名稱", "單位名稱"], 
-            "yellow": ["(1) 個資數量", "(2) 個資敏感度", "(3) 損害組織信譽", "(4) 當事人隱私衝擊", "(5) 業務合作單位", "風險評分加總"],
-            "green": ["風險對應作法"]
-        }
+        rules = {"blue": ["編號", "作業流程名稱", "單位名稱"], "yellow": ["(1) 個資數量", "(2) 個資敏感度", "(3) 損害組織信譽", "(4) 當事人隱私衝擊", "(5) 業務合作單位", "風險評分加總"], "green": ["風險對應作法"]}
         xl = generate_excel(edited, rename_dict, rules)
         st.download_button("📥 匯出 Excel", xl, "風險評鑑表.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -417,26 +375,80 @@ elif menu == "4. 委外廠商":
     st.markdown("### 🤝 委外廠商個資清冊")
     if is_admin: st.info("👁️ 目前身分：【總管理員】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
     else: st.info(f"🔒 目前身分：【{user_unit}】。💡 刪除方式：選取最左側行號 -> 按鍵盤 `Delete` 鍵 -> 點擊儲存。")
-        
+    
+    # ------------------------------------------
+    # 🌟 新增：委外廠商清冊 提示藍色說明範例列
+    # ------------------------------------------
+    vendor_scopes = ["姓名", "出生年月日", "國民身分證編號", "電話", "地址", "護照號碼", "特徵", "指紋", "婚姻", "家庭", "教育", "職業", "病歷", "醫療", "基因", "性生活", "健康檢查", "犯罪前科", "財務情況", "社會活動", "車籍資料"]
+    
+    st.markdown("##### 💡 填寫範例與說明參考 (同 Excel 附件)")
+    st.info("📌 **【個人資料範圍 (姓名 ~ 車籍資料) 填寫說明】**：\n辨識檔案是否含有自然人之姓名、出生年月日、國民身分證統一編號、護照號碼、特徵…等個人資料 (如有請填列Y，如無請填列N)。")
+    
+    ex_vendor_dict = {
+        "item_no": "請依流水號進行填列",
+        "vendor_name": "請填寫委外廠商名稱",
+        "file_name": "請填列含有和泰所屬個人資料之檔案名稱\n(個人資料應分筆分列填寫)",
+        "file_type": "請下拉選擇",
+        "pi_amount": "填列筆數(數位、影像、影音)/份數(紙本)",
+        "pi_purpose": "識別該資料之使用目的",
+        "data_source": "如: 和泰汽車、顧客",
+        "source_channel": "如: 透過活動網站、APP註冊等",
+        "store_loc": "如: Google Cloud、實體檔案室",
+        "sys_name": "該筆個資檔案儲存之系統名稱",
+        "trans_target": "如: 其他協力廠商",
+        "trans_purpose": "說明傳送目的",
+        "trans_method": "如: API介接、FTP檔案傳輸等",
+        "remark": "其他補充說明"
+    }
+    for s in vendor_scopes: ex_vendor_dict[f"scope_{s}"] = "填 Y 或 N"
+    
+    rename_vendor_map = {
+        "item_no": "🟦編號", "vendor_name": "🟦委外廠商名稱", "file_name": "🟦個人資料檔案名稱", "file_type": "🟦檔案類型",
+        "pi_amount": "🟩筆數/份數", "pi_purpose": "🟩個人資料檔案使用目的",
+        "data_source": "🟧資料來源", "source_channel": "🟧資料來源管道", "sys_name": "🟧資料鍵入之資訊系統",
+        "trans_target": "🟧傳送對象", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式",
+        "store_loc": "🟪儲存地點及位置", "remark": "⬜備註"
+    }
+    for s in vendor_scopes: rename_vendor_map[f"scope_{s}"] = f"🟩{s}"
+    
+    vendor_order = ["item_no", "vendor_name", "file_name", "file_type", "pi_amount", "pi_purpose"] + [f"scope_{s}" for s in vendor_scopes] + ["data_source", "source_channel", "store_loc", "sys_name", "trans_target", "trans_purpose", "trans_method", "remark"]
+    
+    ex_vendor_df = pd.DataFrame([ex_vendor_dict])[ [c for c in vendor_order if c in rename_vendor_map] ].rename(columns=rename_vendor_map)
+    st.dataframe(ex_vendor_df.style.set_properties(**{'color': '#1E90FF', 'white-space': 'pre-wrap'}), hide_index=True)
+    # ------------------------------------------
+
     df = load_data("vendor_inventory")
-    cols = ["unit_name", "vendor_name", "file_name", "pi_scope", "trans_purpose", "trans_method"]
-    for c in cols:
+    for c in vendor_order:
         if c not in df.columns: df[c] = None
 
-    edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=cols, column_config={
-        "id": None, 
-        "unit_name": st.column_config.TextColumn("🟦單位", disabled=not is_admin), 
-        "vendor_name": "🟦廠商名稱", "file_name": "🟦檔案名稱",
-        "pi_scope": "🟩個資範圍", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式"
-    })
+    cfg = {
+        "id": None, "unit_name": None,
+        "item_no": "🟦編號", "vendor_name": "🟦委外廠商名稱", "file_name": "🟦個人資料檔案名稱",
+        "file_type": st.column_config.SelectboxColumn("🟦檔案類型", options=FILE_TYPE_OPTIONS),
+        "pi_amount": "🟩筆數/份數", "pi_purpose": "🟩個人資料檔案使用目的",
+        "data_source": "🟧資料來源", "source_channel": "🟧資料來源管道", "sys_name": "🟧資料鍵入之資訊系統",
+        "trans_target": "🟧傳送對象", "trans_purpose": "🟧傳送目的", "trans_method": "🟧傳送方式",
+        "store_loc": "🟪儲存地點及位置", "remark": "⬜備註"
+    }
+    for s in vendor_scopes: cfg[f"scope_{s}"] = st.column_config.SelectboxColumn(f"🟩{s}", options=YN_OPTIONS)
+
+    edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, column_order=vendor_order, column_config=cfg)
     
     c1, c2 = st.columns([1, 6])
     with c1:
-        if st.button("💾 儲存廠商"):
+        if st.button("💾 儲存廠商清冊"):
             if save_data("vendor_inventory", edited, df): time.sleep(0.5); st.rerun()
     with c2:
-        rename_dict = {"unit_name": "單位", "vendor_name": "廠商名稱", "file_name": "個資檔案名稱", "pi_scope": "個資範圍", "trans_purpose": "傳送目的", "trans_method": "傳送方式"}
-        rules = {"blue": ["單位", "廠商名稱", "個資檔案名稱"], "green": ["個資範圍"], "orange": ["傳送目的", "傳送方式"]}
+        # Excel 匯出設定
+        rename_dict = {"item_no": "編號", "vendor_name": "委外廠商名稱", "file_name": "個人資料檔案名稱", "file_type": "檔案類型", "pi_amount": "筆數/份數", "pi_purpose": "個人資料檔案使用目的", "data_source": "資料來源", "source_channel": "資料來源管道", "sys_name": "資料鍵入之資訊系統", "trans_target": "傳送對象", "trans_purpose": "傳送目的", "trans_method": "傳送方式", "store_loc": "儲存地點及位置", "remark": "備註"}
+        for s in vendor_scopes: rename_dict[f"scope_{s}"] = s
+        rules = {
+            "blue": ["編號", "委外廠商名稱", "個人資料檔案名稱", "檔案類型"],
+            "green": ["筆數/份數", "個人資料檔案使用目的"] + vendor_scopes,
+            "orange": ["資料來源", "資料來源管道", "資料鍵入之資訊系統", "傳送對象", "傳送目的", "傳送方式"],
+            "purple": ["儲存地點及位置"],
+            "grey": ["備註"]
+        }
         xl = generate_excel(edited, rename_dict, rules)
         st.download_button("📥 匯出 Excel", xl, "委外廠商清冊.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
